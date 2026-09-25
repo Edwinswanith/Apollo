@@ -1,0 +1,17 @@
+# Secrets: never commit
+.env
+.env.*
+
+# Raw generations, review copies and test output (large, not for the website)
+review/
+.playwright-mcp/
+
+# Source photos and the skill package stay local
+Doctor_journey/
+10k-websites-skill/
+
+# Tooling noise
+node_modules/
+*.zip
+.DS_Store
+Thumbs.db

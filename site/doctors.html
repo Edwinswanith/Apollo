@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Find a doctor · Apollo Hospitals</title>
+<meta name="description" content="Search Apollo Hospitals doctors by name or specialty.">
+<meta name="theme-color" content="#F3EEE6">
+<link rel="icon" type="image/png" href="assets/img/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="draft" role="note">Demo site. Names, phone numbers and addresses are sample content, not real hospital information.</div>
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="Apollo Hospitals home">
+    <img src="assets/img/mark.png" alt="" width="36" height="36">
+    <span>Apollo Hospitals<small>Demo Branch</small></span>
+  </a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+  <nav class="nav" id="site-nav" aria-label="Main">
+    <a href="doctors.html">Find a doctor</a>
+    <a href="departments.html">Departments</a>
+    <a href="locations.html">Locations</a>
+    <a href="contact.html">Contact</a>
+    <a class="emergency" href="emergency.html">Emergency</a>
+    <a class="btn btn-primary" href="book.html">Book appointment</a>
+  </nav>
+</header>
+<main id="main" tabindex="-1">
+<section class="page-hero reveal"><div class="wrap">
+  <span class="kicker rv">Find a doctor</span>
+  <h1 class="rv">Find the right doctor.</h1>
+  <p class="lede rv">Search by a doctor's name or by what you need help with. These are sample profiles.</p>
+</div></section>
+<section class="section reveal" style="padding-top:40px"><div class="wrap">
+<div class="field rv"><label for="doctor-q">Doctor or specialty</label><input class="input" id="doctor-q" type="search" placeholder="For example, Cardiology" autocomplete="off"></div><p id="doctor-status" aria-live="polite" style="margin-top:12px;color:var(--ink-2)"></p><ul class="grid rv" data-doctor-list style="list-style:none;padding:0"><li class="card"><h3>Dr. Ananya Rao</h3><p>Cardiology</p><p>MBBS, MD, DM (Cardiology) · Mon, Wed, Fri</p><p style="margin-top:12px"><a href="book.html">Book with this doctor</a></p></li><li class="card"><h3>Dr. Vikram Menon</h3><p>Orthopaedics</p><p>MBBS, MS (Orthopaedics) · Tue, Thu, Sat</p><p style="margin-top:12px"><a href="book.html">Book with this doctor</a></p></li><li class="card"><h3>Dr. Priya Sharma</h3><p>Neurology</p><p>MBBS, MD, DM (Neurology) · Mon to Fri</p><p style="margin-top:12px"><a href="book.html">Book with this doctor</a></p></li><li class="card"><h3>Dr. Arjun Iyer</h3><p>Paediatrics</p><p>MBBS, MD (Paediatrics) · Mon to Sat</p><p style="margin-top:12px"><a href="book.html">Book with this doctor</a></p></li><li class="card"><h3>Dr. Meera Nair</h3><p>Women's Health</p><p>MBBS, MS (Obstetrics and Gynaecology) · Tue to Sat</p><p style="margin-top:12px"><a href="book.html">Book with this doctor</a></p></li><li class="card"><h3>Dr. Rahul Verma</h3><p>General Medicine</p><p>MBBS, MD (General Medicine) · Mon to Sat</p><p style="margin-top:12px"><a href="book.html">Book with this doctor</a></p></li></ul>
+</div></section>
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="cols">
+      <div><strong>Apollo Hospitals</strong> · Demo Branch</div>
+      <nav aria-label="Footer">
+        <a href="index.html">Walk through the hospital</a><a href="doctors.html">Find a doctor</a><a href="departments.html">Departments</a><a href="book.html">Book appointment</a><a href="locations.html">Locations</a><a href="contact.html">Contact</a><a href="emergency.html">Emergency</a>
+      </nav>
+    </div>
+    <p class="fine">Some images on this site are AI-assisted visualisations based on photographs of the hospital. Demo content: all names, phone numbers and addresses on this site are samples.</p>
+  </div>
+</footer>
+<div class="action-bar" aria-label="Quick actions">
+  <a class="btn btn-ghost" href="contact.html">Call</a>
+  <a class="btn btn-primary" href="book.html">Book</a>
+  <a class="btn btn-ghost" href="locations.html">Directions</a>
+</div>
+<div class="env" aria-hidden="true"></div>
+<script src="assets/site.js" defer></script>
+</body>
+</html>

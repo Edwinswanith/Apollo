@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apollo Hospitals · Walk Through Apollo</title>
+<meta name="description" content="Take a calm walk through Apollo Hospitals before you arrive, then find a doctor, book an appointment or get directions.">
+<meta name="theme-color" content="#F3EEE6">
+<link rel="icon" type="image/png" href="assets/img/favicon.png">
+<meta property="og:title" content="Walk Through Apollo">
+<meta property="og:description" content="Take a calm walk through the hospital before you arrive.">
+<meta property="og:type" content="website">
+<!-- DEPLOY STEP: replace with absolute live URLs -->
+<meta property="og:url" content="https://example.com/">
+<meta property="og:image" content="https://example.com/assets/stills/arrival.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<link rel="stylesheet" href="assets/journey.css">
+<noscript><style>
+  .journey{height:auto!important}
+  .stage{position:static;height:auto;overflow:visible}
+  .media,.loader,.rail{display:none}
+  .stop{position:static;opacity:1!important;visibility:visible!important;display:grid}
+  .stop-fig{display:block}
+</style></noscript>
+</head>
+<body>
+<a class="skip" href="#essentials">Skip the walk</a>
+<div class="draft" role="note">Demo site. Names, phone numbers and addresses are sample content, not real hospital information.</div>
+
+<header class="site-header">
+  <a class="brand" href="index.html" aria-label="Apollo Hospitals home">
+    <img src="assets/img/mark.png" alt="" width="36" height="36">
+    <span>Apollo Hospitals<small>Demo Branch</small></span>
+  </a>
+  <button class="menu-btn" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>
+  <nav class="nav" id="site-nav" aria-label="Main">
+    <a href="doctors.html">Find a doctor</a>
+    <a href="departments.html">Departments</a>
+    <a href="locations.html">Locations</a>
+    <a href="contact.html">Contact</a>
+    <a class="emergency" href="emergency.html">Emergency</a>
+    <a class="btn btn-primary" href="book.html">Book appointment</a>
+  </nav>
+</header>
+
+<main id="main" tabindex="-1">
+<section class="journey" id="journey" aria-label="Walk through the hospital">
+  <div class="stage">
+    <div class="media" aria-hidden="true">
+      <video id="hero" muted playsinline preload="none" tabindex="-1" aria-hidden="true" disablepictureinpicture></video>
+      <div class="stills">
+        <img data-still="arrival"    data-src="assets/stills/arrival.jpg" alt="">
+        <img data-still="lobby"      data-src="assets/stills/lobby.jpg" alt="">
+        <img data-still="lobby-desk" data-src="assets/stills/lobby-desk.jpg" alt="">
+        <img data-still="reception"  data-src="assets/stills/reception.jpg" alt="">
+        <img data-still="waiting"    data-src="assets/stills/waiting.jpg" alt="">
+        <img data-still="corridor"   data-src="assets/stills/corridor.jpg" alt="">
+        <img data-still="doorway"    data-src="assets/stills/doorway.jpg" alt="">
+        <img data-still="room"       data-src="assets/stills/room.jpg" alt="">
+        <img data-still="bedside"    data-src="assets/stills/bedside.jpg" alt="">
+        <img data-still="team"       data-src="assets/stills/team.jpg" alt="">
+        <img data-still="logo-wall"  data-src="assets/stills/logo-wall.jpg" alt="">
+      </div>
+      <div class="glow"></div>
+      <div class="scrim"></div>
+    </div>
+
+    <div class="loader" aria-hidden="true">
+      <svg class="ring" viewBox="0 0 48 48"><circle cx="24" cy="24" r="20" class="track"/><circle cx="24" cy="24" r="20" class="fill" style="stroke-dashoffset:var(--ld,126)"/></svg>
+      <span>Loading the walk</span>
+    </div>
+
+    <nav class="rail" aria-label="Stops on the walk">
+      <span class="rail-line" aria-hidden="true"><span class="rail-fill"></span></span>
+      <ol>
+        <li><a href="#stop-arrival" data-go="arrival"><span class="dot"></span><span class="lbl">Arrival</span></a></li>
+        <li><a href="#stop-lobby" data-go="lobby"><span class="dot"></span><span class="lbl">Lobby</span></a></li>
+        <li><a href="#stop-reception" data-go="reception"><span class="dot"></span><span class="lbl">Reception</span></a></li>
+        <li><a href="#stop-visit" data-go="visit"><span class="dot"></span><span class="lbl">Your visit</span></a></li>
+        <li><a href="#stop-doctors" data-go="doctors"><span class="dot"></span><span class="lbl">Doctors</span></a></li>
+        <li><a href="#stop-room" data-go="room"><span class="dot"></span><span class="lbl">Your room</span></a></li>
+        <li><a href="#stop-care" data-go="care"><span class="dot"></span><span class="lbl">Care</span></a></li>
+        <li><a href="#stop-visit-us" data-go="visit-us"><span class="dot"></span><span class="lbl">Visit us</span></a></li>
+        <li><a href="#stop-book" data-go="book"><span class="dot"></span><span class="lbl">Book</span></a></li>
+      </ol>
+    </nav>
+
+    <div class="stops">
+
+      <article class="stop" id="stop-arrival" data-stop="arrival" data-side="left-low">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/arrival.jpg" alt="The Apollo Hospitals gate and the driveway leading to the entrance" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">Apollo Hospitals · Demo Branch</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h1>Your visit starts here.</h1>
+          <p class="body">Take a calm walk through the hospital before you arrive. Scroll to walk in, or skip straight to what you need.</p>
+          <div class="actions">
+            <a class="btn btn-primary" href="book.html">Book an appointment</a>
+            <a class="btn btn-ghost" href="#essentials">Skip the walk</a>
+          </div>
+          <p class="scroll-cue" aria-hidden="true"><span></span>Scroll to walk in</p>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-lobby" data-stop="lobby" data-side="right">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/lobby-desk.jpg" alt="The main lobby with the reception desk and waiting chairs" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">The lobby</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h2>Find the right doctor.</h2>
+          <p class="body">Search by a doctor's name or by what you need help with.</p>
+          <form class="search" action="doctors.html" method="get" role="search">
+            <label for="q">Doctor or specialty</label>
+            <div class="search-row">
+              <input class="input" id="q" name="q" type="search" placeholder="For example, a doctor's name" autocomplete="off">
+              <button class="btn btn-primary" type="submit">Search</button>
+            </div>
+          </form>
+          <a class="text-link" href="book.html">Or book an appointment</a>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-reception" data-stop="reception" data-side="left">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/reception.jpg" alt="The reception desk in front of the teal wall with the hospital logo" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">Reception</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h2>What brings you in today?</h2>
+          <p class="body">Pick an area and we will point you to the right doctors further along.</p>
+          <fieldset class="picker">
+            <legend class="visually-hidden">Choose a specialty</legend>
+            <button type="button" class="chip" aria-pressed="false" data-choice="Cardiology">Cardiology</button>
+            <button type="button" class="chip" aria-pressed="false" data-choice="Orthopaedics">Orthopaedics</button>
+            <button type="button" class="chip" aria-pressed="false" data-choice="Neurology">Neurology</button>
+            <button type="button" class="chip" aria-pressed="false" data-choice="Paediatrics">Paediatrics</button>
+            <button type="button" class="chip" aria-pressed="false" data-choice="Women's Health">Women's Health</button>
+            <button type="button" class="chip" aria-pressed="false" data-choice="General Medicine">General Medicine</button>
+          </fieldset>
+          <p class="picked" aria-live="polite"></p>
+          <a class="text-link" href="departments.html">See all departments</a>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-visit" data-stop="visit" data-side="left">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/waiting.jpg" alt="The waiting hall with rows of seats and a corridor on the right" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">Your visit</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h2>Three simple steps.</h2>
+          <ol class="steps">
+            <li><strong>Book</strong><span>Choose a time that suits you.</span></li>
+            <li><strong>Check in</strong><span>Come to reception with a photo ID, any earlier reports and a list of your medicines.</span></li>
+            <li><strong>See your doctor</strong><span>Take a seat. Your doctor will call you in.</span></li>
+          </ol>
+          <p class="meta">Outpatient hours: Monday to Saturday, 8 am to 8 pm</p>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-doctors" data-stop="doctors" data-side="right">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/corridor.jpg" alt="A bright hospital corridor with a nurse walking ahead" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">Our doctors</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h2>Meet the people who will care for you.</h2>
+          <p class="filter-note" aria-live="polite" hidden></p>
+          <ul class="docs">
+            <li data-spec="Cardiology"><span class="avatar" aria-hidden="true"></span><div><strong>Dr. Ananya Rao</strong>Cardiology<small>MBBS, MD, DM (Cardiology) · Mon, Wed, Fri</small></div></li>
+            <li data-spec="Orthopaedics"><span class="avatar" aria-hidden="true"></span><div><strong>Dr. Vikram Menon</strong>Orthopaedics<small>MBBS, MS (Orthopaedics) · Tue, Thu, Sat</small></div></li>
+            <li data-spec="Neurology"><span class="avatar" aria-hidden="true"></span><div><strong>Dr. Priya Sharma</strong>Neurology<small>MBBS, MD, DM (Neurology) · Mon to Fri</small></div></li>
+          </ul>
+          <a class="text-link" href="doctors.html">See all doctors</a>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-room" data-stop="room" data-side="right">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/room.jpg" alt="A calm private patient room with a window looking out over trees" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">Staying with us</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h2>A calm room to rest and recover.</h2>
+          <p class="body">Private and twin-sharing rooms, each with a nurse call button, a window and space for one family member to stay.</p>
+          <h3 class="sub">Technology and treatments</h3>
+          <p class="body">Round-the-clock diagnostics and imaging, and specialist teams for heart, bone and joint, brain and nerve care.</p>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-care" data-stop="care" data-side="left">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/bedside.jpg" alt="A doctor and a nurse talking with a patient at the bedside" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">Care</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h2>Looked after, every step of the way.</h2>
+          <p class="body">A care coordinator for every inpatient, visits from a dietitian, and help with insurance paperwork.</p>
+          <blockquote class="quote"><p>The nurses explained every step before it happened. I never once felt lost.</p><cite>Sample patient story</cite></blockquote>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-visit-us" data-stop="visit-us" data-side="left">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/team.jpg" alt="The care team at the front desk helping visitors" width="1440" height="810"></figure>
+        <div class="panel">
+          <span class="kicker">Visit us</span>
+          <svg class="guide" viewBox="0 0 72 8" aria-hidden="true"><path d="M2 4 H70"/></svg>
+          <h2>We are here when you need us.</h2>
+          <dl class="facts">
+            <div><dt>Address</dt><dd>12 Demo Road, Sample Nagar, Your City 500000</dd></div>
+            <div><dt>Appointments</dt><dd>+91 00000 00001</dd></div>
+            <div><dt>Visiting hours</dt><dd>4 pm to 7 pm, every day</dd></div>
+            <div><dt>Emergency</dt><dd>112 (national emergency) · 108 (ambulance)</dd></div>
+          </dl>
+          <a class="btn btn-ghost" href="locations.html">Get directions</a>
+        </div>
+      </article>
+
+      <article class="stop" id="stop-book" data-stop="book" data-side="center">
+        <figure class="stop-fig"><img loading="lazy" src="assets/stills/logo-wall.jpg" alt="The Apollo Hospitals logo on the teal wall above the reception counter" width="1440" height="810"></figure>
+        <div class="panel">
+          <h2>Ready when you are.</h2>
+          <div class="actions">
+            <a class="btn btn-primary" href="book.html">Book an appointment</a>
+            <a class="btn btn-ghost" href="tel:+910000000001">Call +91 00000 00001</a>
+          </div>
+        </div>
+      </article>
+
+    </div>
+  </div>
+</section>
+
+<section class="section essentials reveal" id="essentials" tabindex="-1" aria-labelledby="ess-h">
+  <div class="wrap">
+    <span class="kicker rv">Quick links</span>
+    <h2 id="ess-h" class="rv">Everything in one place.</h2>
+    <div class="grid">
+      <a class="card rv" href="doctors.html"><h3>Find a doctor</h3><p>Search by name or specialty.</p><span class="arrow" aria-hidden="true">&rarr;</span></a>
+      <a class="card rv" href="departments.html"><h3>Departments</h3><p>See every area of care.</p><span class="arrow" aria-hidden="true">&rarr;</span></a>
+      <a class="card rv" href="book.html"><h3>Book an appointment</h3><p>Pick a time that suits you.</p><span class="arrow" aria-hidden="true">&rarr;</span></a>
+      <a class="card rv" href="locations.html"><h3>Locations</h3><p>Address, map and parking.</p><span class="arrow" aria-hidden="true">&rarr;</span></a>
+      <a class="card rv" href="contact.html"><h3>Contact</h3><p>Phone numbers and email.</p><span class="arrow" aria-hidden="true">&rarr;</span></a>
+      <a class="card rv urgent" href="emergency.html"><h3>Emergency</h3><p>What to do right now.</p><span class="arrow" aria-hidden="true">&rarr;</span></a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="cols">
+      <div><strong>Apollo Hospitals</strong> · Demo Branch</div>
+      <nav aria-label="Footer">
+        <a href="doctors.html">Find a doctor</a><a href="departments.html">Departments</a><a href="book.html">Book appointment</a><a href="locations.html">Locations</a><a href="contact.html">Contact</a><a href="emergency.html">Emergency</a>
+      </nav>
+    </div>
+    <p class="fine">Some images on this site are AI-assisted visualisations based on photographs of the hospital. Demo content: all names, phone numbers and addresses on this site are samples.</p>
+  </div>
+</footer>
+
+<div class="action-bar" aria-label="Quick actions">
+  <a class="btn btn-ghost" href="contact.html">Call</a>
+  <a class="btn btn-primary" href="book.html">Book</a>
+  <a class="btn btn-ghost" href="locations.html">Directions</a>
+</div>
+
+<div class="env" aria-hidden="true"></div>
+<script src="assets/site.js" defer></script>
+<script src="assets/journey.js" defer></script>
+</body>
+</html>
