@@ -18,6 +18,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/site.css">
 <link rel="stylesheet" href="assets/journey.css">
+<script>
+  /* Pick the still-photo journey before first paint for reduce-motion or data-saver visitors. */
+  (function(){try{var c=navigator.connection;if(matchMedia('(prefers-reduced-motion: reduce)').matches||(c&&c.saveData))document.documentElement.classList.add('static-journey');}catch(e){}})();
+</script>
 <noscript><style>
   .journey{height:auto!important}
   .stage{position:static;height:auto;overflow:visible}
@@ -28,7 +32,7 @@
 </head>
 <body>
 <a class="skip" href="#essentials">Skip the walk</a>
-<div class="draft" role="note">Demo site. Apollo-wide facts and helplines are from public Apollo Hospitals sources. Doctors, branch address and hours are samples.</div>
+<div class="draft" role="note">Demo site. Helplines and Apollo facts are real. Doctors, address and hours are samples.</div>
 
 <header class="site-header">
   <a class="brand" href="index.html" aria-label="Apollo Hospitals home">

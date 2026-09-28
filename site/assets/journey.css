@@ -90,34 +90,88 @@
 
 .essentials{background:linear-gradient(var(--canvas),#EFE8DC)}
 
-/* Short desktop windows: keep the walk, drop the small overlays */
-@media (max-height:560px){.rail,.loader,.scroll-cue{display:none}}
+/* Short windows (landscape phones, shallow laptop windows): keep the walk, compact the overlays */
+@media (max-height:560px){
+  .rail,.loader,.scroll-cue{display:none}
+  .panel{left:16px;width:min(380px,48vw);max-height:calc(100% - 20px);padding:16px 18px}
+  .stop[data-side="right"] .panel{right:16px}
+  .stop[data-side="left-low"] .panel{bottom:10px}
+  .stop[data-side="center"] .panel{bottom:10px}
+  .panel h1{font-size:24px}
+  .panel h2{font-size:21px}
+  .panel .body{font-size:14px;margin-top:6px}
+  .panel .guide{margin:6px 0 8px}
+  .panel .actions{margin-top:12px}
+  .picker{margin-top:10px}
+  .chip{padding:8px 11px;font-size:13.5px}
+  .steps,.docs{margin-top:10px;gap:6px}
+}
 
-/* ===== Static journey (five gates; identical strings live in journey.js) ===== */
-@media (max-width: 720px), (orientation: portrait) and (max-width: 1024px), (orientation: portrait) and (pointer: coarse), (orientation: landscape) and (pointer: coarse) and (max-height: 560px), (prefers-reduced-motion: reduce){
-  .journey{height:auto!important}
-  .stage{position:static;height:auto;overflow:visible;background:none}
-  .media,.loader,.rail{display:none}
-  .stops{position:static;pointer-events:auto}
-  .stop{position:static;opacity:1!important;visibility:visible!important;display:block;padding:0 0 28px}
-  .stop-fig{display:block;aspect-ratio:4/3;overflow:hidden;background:#D9D2C6}
-  .stop-fig img{width:100%;height:100%;object-fit:cover}
-  .stop[data-stop="arrival"] .stop-fig img{object-position:30% 50%}
-  .stop[data-stop="bedside"] .stop-fig img,.stop[data-stop="care"] .stop-fig img{object-position:40% 50%}
-  .panel,.stop[data-side="right"] .panel,.stop[data-side="center"] .panel,.stop[data-side="left-low"] .panel{position:relative;top:auto;left:auto;right:auto;bottom:auto;width:auto;max-height:none;overflow:visible;margin:-36px 16px 0;transform:none;text-align:left;background:var(--panel)}
+/* Phones and upright tablets: the walk fills the screen, text rides in a bottom sheet */
+@media (orientation: portrait) and (max-width: 1100px), (max-width: 820px) and (min-height: 561px){
+  .panel,.stop[data-side="right"] .panel,.stop[data-side="left-low"] .panel,.stop[data-side="center"] .panel{
+    top:auto;bottom:12px;left:max(12px,calc(50% - 300px));right:max(12px,calc(50% - 300px));width:auto;
+    max-height:58%;padding:20px 20px 18px;border-radius:16px;text-align:left;
+    transform:translate3d(0,calc((1 - var(--k,1)) * 18px),0)}
+  .stop[data-side="center"] .panel{background:rgba(251,248,243,.92)}
   .stop[data-side="center"] .actions{justify-content:flex-start}
-  .panel .guide path{stroke-dashoffset:0}
-  .search-row{flex-direction:column}
-  .scroll-cue{display:none}
+  .panel h1{font-size:30px}
+  .panel h2{font-size:25px}
+  .panel .body{font-size:15.5px;margin-top:8px}
+  .panel .guide{margin:8px 0 10px}
+  .panel .actions{margin-top:16px}
+  .panel .actions .btn{flex:1 1 auto}
+  .scroll-cue{margin-top:14px}
+  .docs li{padding:10px}
+  .docs li:nth-child(n+3){display:none}
+  .quote{margin-top:12px;padding:12px 14px}
+  /* the floor-guide rail becomes a slim progress line across the top */
+  .rail{top:10px;left:14px;right:14px;height:22px;transform:none}
+  .rail-line{left:8px;right:8px;top:9px;bottom:auto;width:auto;height:4px}
+  .rail-fill{transform-origin:0 50%;transform:scaleX(var(--railp,0))}
+  .rail ol{flex-direction:row;height:22px}
+  .rail .lbl{display:none}
+  .loader{top:40px;bottom:auto;right:12px}
 }
-@media (min-width: 721px) and (orientation: portrait) and (max-width: 1024px){
-  .stops{max-width:760px;margin:0 auto}
-  .stop-fig{aspect-ratio:16/9}
+
+/* ===== Static journey: only for reduce-motion or data-saver visitors (html.static-journey, set in <head>) ===== */
+html.static-journey .journey{height:auto!important}
+html.static-journey .stage{position:static;height:auto;overflow:visible;background:none}
+html.static-journey .media,html.static-journey .loader,html.static-journey .rail{display:none}
+html.static-journey .stops{position:static;pointer-events:auto}
+html.static-journey .stop{position:static;opacity:1!important;visibility:visible!important;display:block;padding:0 0 28px}
+html.static-journey .stop-fig{display:block;aspect-ratio:4/3;overflow:hidden;background:#D9D2C6}
+html.static-journey .stop-fig img{width:100%;height:100%;object-fit:cover}
+html.static-journey .stop[data-stop="arrival"] .stop-fig img{object-position:30% 50%}
+html.static-journey .stop[data-stop="care"] .stop-fig img{object-position:40% 50%}
+html.static-journey .panel,html.static-journey .stop[data-side] .panel{position:relative;top:auto;left:auto;right:auto;bottom:auto;width:auto;max-height:none;overflow:visible;margin:-36px 16px 0;transform:none;text-align:left;background:var(--panel)}
+html.static-journey .stop[data-side="center"] .actions{justify-content:flex-start}
+html.static-journey .panel .guide path{stroke-dashoffset:0}
+html.static-journey .docs li:nth-child(n+3){display:flex}
+html.static-journey .scroll-cue{display:none}
+@media (max-width: 720px){html.static-journey .search-row{flex-direction:column}}
+@media (min-width: 721px) and (max-width: 1024px){
+  html.static-journey .stops{max-width:760px;margin:0 auto}
+  html.static-journey .stop-fig{aspect-ratio:16/9}
 }
-/* Static journey on wide screens (reduced motion on desktop): a calm, contained column */
-@media (prefers-reduced-motion: reduce) and (min-width: 1025px){
-  .stops{max-width:1080px;margin:0 auto;padding:32px 24px 0}
-  .stop{display:grid;grid-template-columns:1.25fr 1fr;align-items:center;gap:0;padding:0 0 40px}
-  .stop-fig{aspect-ratio:4/3;border-radius:18px}
-  .panel,.stop[data-side="right"] .panel,.stop[data-side="center"] .panel,.stop[data-side="left-low"] .panel{margin:0 0 0 -48px}
+@media (min-width: 1025px){
+  html.static-journey .stops{max-width:1080px;margin:0 auto;padding:32px 24px 0}
+  html.static-journey .stop{display:grid;grid-template-columns:1.25fr 1fr;align-items:center;gap:0;padding:0 0 40px}
+  html.static-journey .stop-fig{aspect-ratio:4/3;border-radius:18px}
+  html.static-journey .panel,html.static-journey .stop[data-side] .panel{margin:0 0 0 -48px}
 }
+
+/* Phones: the Call / Book / Directions bar sits at the bottom; lift the sheet above it */
+@media (max-width: 720px) and (min-height: 561px){
+  .panel,.stop[data-side] .panel{bottom:calc(76px + env(safe-area-inset-bottom));max-height:calc(58% - 40px)}
+  .loader{top:40px}
+}
+/* The first stop is on screen before the banner scrolls away: keep its buttons in view */
+.stop[data-stop="arrival"] .panel{bottom:calc(28px + var(--banner-h,0px))}
+@media (orientation: portrait) and (max-width: 1100px), (max-width: 820px) and (min-height: 561px){
+  .stop[data-stop="arrival"] .panel{bottom:calc(12px + var(--banner-h,0px))}
+}
+@media (max-width: 720px) and (min-height: 561px){
+  .stop[data-stop="arrival"] .panel{bottom:calc(76px + env(safe-area-inset-bottom) + var(--banner-h,0px))}
+}
+@media (max-height:560px){.stop[data-stop="arrival"] .panel{bottom:calc(10px + var(--banner-h,0px))}}

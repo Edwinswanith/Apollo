@@ -14,8 +14,10 @@ site/                 the website (this is what gets deployed)
   doctors.html, departments.html, book.html,
   locations.html, contact.html, emergency.html
   assets/
-    video/walk-a..d.mp4 the walk as four chapter videos (1920x1080, 52 MB total),
-                      encoded once from the full-quality Veo masters and loaded in order
+    video/walk-a..d.mp4    the walk as four chapters, 1920x1080 (52 MB, laptops, desktops, tablets)
+    video/walk-a..d-l.mp4  same chapters at 1280x720 (24 MB, landscape phones)
+    video/walk-a..d-p.mp4  same chapters as a 9:16 centre crop (18 MB, portrait phones)
+                           all encoded once from the full-quality Veo masters, identical frame timing
     stills/           chapter images (transitions, phone and reduced-motion versions)
     site.css, journey.css, site.js, journey.js
 tools/
@@ -43,6 +45,9 @@ Open http://127.0.0.1:8080/. Opening index.html directly shows the still-image v
 
 ## Behaviour
 
-- Laptops and desktops: the scroll-driven walk; chapter A streams behind a loading ring, B to D follow in the background.
-- Phones, portrait tablets and reduced motion: a static chapter version; the video is never downloaded.
+- The animated walk runs on every device: phones, tablets, laptops and desktops.
+- Each screen shape loads the matching video set (portrait crop, 720p or 1080p); rotating mid-walk swaps sets and keeps your place.
+- Phones and upright tablets show the text in a bottom sheet and the stop rail as a progress line across the top.
+- Chapter A streams behind a loading ring; B to D follow in the background.
+- Visitors who turned on reduce motion or data saver get a still-photo version with the same content.
 - If any chapter fails to load, that walk crossfades still images and the rest of the journey still plays.

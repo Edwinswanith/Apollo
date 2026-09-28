@@ -2,23 +2,32 @@
 (() => {
   'use strict';
 
-  // The five static-journey gates. Identical strings live in journey.css.
-  const GATES = [
-    '(max-width: 720px)',
-    '(orientation: portrait) and (max-width: 1024px)',
-    '(orientation: portrait) and (pointer: coarse)',
-    '(orientation: landscape) and (pointer: coarse) and (max-height: 560px)',
-    '(prefers-reduced-motion: reduce)'
-  ];
+  // The animated walk runs on every device. Only visitors who asked their device for
+  // reduced motion or data saving get the still-photo version (html.static-journey).
+  const REDUCE = matchMedia('(prefers-reduced-motion: reduce)');
+  const saveData = !!(navigator.connection && navigator.connection.saveData);
+  const wantsStatic = () => REDUCE.matches || saveData;
 
   // The walk, as four chapter videos encoded from the full-quality masters.
   // They load in order (a first, behind the ring); each has its own seek gate.
-  const CHAPTERS = {
-    a: { url: 'assets/video/walk-a.mp4', bytes: 23679197 },   // gate to lobby (S1 + S2)
-    b: { url: 'assets/video/walk-b.mp4', bytes: 9736807 },    // lobby to reception (S3, 4K master)
-    c: { url: 'assets/video/walk-c.mp4', bytes: 14092348 },   // waiting hall to corridor (S4 + S5)
-    d: { url: 'assets/video/walk-d.mp4', bytes: 7203572 }     // doorway into the room (S6)
+  // Three sets of the same four chapters, cut from the same masters with identical frame timing:
+  //   hd = 1920x1080 (laptops, desktops, large landscape tablets)
+  //   l  = 1280x720  (landscape phones and small landscape tablets)
+  //   p  = 608x1080 exact centre crop (portrait phones and tablets; matches the stills' cover crop)
+  const CHAPTERS = { a: {}, b: {}, c: {}, d: {} };          // a gate to lobby, b lobby to reception, c hall to corridor, d into the room
+  const SETS = {
+    hd: { suffix: '',   bytes: { a: 23679197, b: 9736807, c: 14092348, d: 7203572 } },
+    l:  { suffix: '-l', bytes: { a: 11410453, b: 4520181, c: 6864956,  d: 2765950 } },
+    p:  { suffix: '-p', bytes: { a: 7657697,  b: 3319329, c: 5280726,  d: 2608456 } }
   };
+  // The portrait set is an exact 9:16 centre crop, so it only matches the stills' cover crop when
+  // the stage is 9:16 or narrower (phones). Upright tablets are wider than that and get the full frame.
+  function pickSet() {
+    const aspect = innerWidth / Math.max(1, innerHeight - 64);
+    if (aspect <= 0.5625) return 'p';
+    if (innerHeight > innerWidth) return 'hd';
+    return innerWidth <= 1100 ? 'l' : 'hd';
+  }
   const CH_ORDER = ['a', 'b', 'c', 'd'];
 
   // The journey, in scroll order. len is in viewport heights (a starting point).
@@ -80,6 +89,7 @@
     const c = CHAPTERS[id];
     const v = document.createElement('video');
     v.muted = true; v.playsInline = true; v.preload = 'none'; v.tabIndex = -1;
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
     v.disablePictureInPicture = true;
     v.setAttribute('aria-hidden', 'true');
     v.className = 'walk';
@@ -104,8 +114,11 @@
   }
   const anyBusy = () => CH_ORDER.some(id => CHAPTERS[id].busy);
 
-  async function loadChapter(c) {
+  let loadGen = 0, currentSet = null, activeCtrl = null;
+
+  async function loadChapter(c, gen) {
     const ctrl = new AbortController();
+    activeCtrl = ctrl;
     let watchdog = setTimeout(() => ctrl.abort(), 20000);
     const res = await fetch(c.url, { priority: 'low', signal: ctrl.signal });
     if (!res.ok || !res.body) throw new Error('video ' + res.status);
@@ -129,28 +142,61 @@
       }
     }
     clearTimeout(watchdog);
+    if (gen !== loadGen) return;                // the screen changed shape mid-load; a newer set is loading
     if (showRing) ringFill.style.setProperty('--ld', 0);
-    c.el.src = URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' }));
+    c.objectUrl = URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' }));
+    c.el.src = c.objectUrl;
     c.el.load();
     await new Promise((resolve, reject) => {
       c.el.addEventListener('canplay', resolve, { once: true });
       c.el.addEventListener('error', reject, { once: true });
     });
+    // iPhones and iPads only paint seeked frames of a muted inline video after it has played once.
+    try { await c.el.play(); } catch (_) {}
+    c.el.pause();
+    if (gen !== loadGen) return;
     c.ready = true;
     if (c.id === 'a') stage.classList.add('video-ready');
     kick();
   }
 
   async function loadAllChapters() {
-    for (const id of CH_ORDER) {
+    const gen = ++loadGen;
+    const set = SETS[currentSet];
+    CH_ORDER.forEach(id => {
       const c = CHAPTERS[id];
-      try { await loadChapter(c); }
+      c.url = 'assets/video/walk-' + id + set.suffix + '.mp4';
+      c.bytes = set.bytes[id];
+    });
+    for (const id of CH_ORDER) {
+      if (gen !== loadGen) return;
+      const c = CHAPTERS[id];
+      try { await loadChapter(c, gen); }
       catch (_) {
+        if (gen !== loadGen) return;
         c.failed = true;                        // this walk falls back to crossfading stills
         if (id === 'a') stage.classList.add('video-failed');
         kick();
       }
     }
+  }
+
+  // Rotating a phone or resizing a window across a set boundary swaps to the matching set.
+  function switchSetIfNeeded() {
+    const want = pickSet();
+    if (!heroInit || want === currentSet) return;
+    currentSet = want;
+    if (activeCtrl) activeCtrl.abort();
+    CH_ORDER.forEach(id => {
+      const c = CHAPTERS[id];
+      c.ready = false; c.failed = false; c.busy = false; c.pending = null;
+      c.el.removeAttribute('src'); c.el.load();
+      if (c.objectUrl) { URL.revokeObjectURL(c.objectUrl); c.objectUrl = null; }
+    });
+    stage.classList.remove('video-ready', 'video-failed');
+    ringFill.style.setProperty('--ld', 126);
+    loadAllChapters();
+    kick();
   }
 
   function initHeroOnce() {
@@ -159,7 +205,7 @@
     // Stills first (the arrival frame wins the bandwidth race), then the walks in order.
     const order = ['arrival', 'lobby', 'lobby-desk', 'reception', 'waiting', 'corridor', 'doorway', 'room', 'bedside', 'team', 'logo-wall'];
     let started = false;
-    const start = () => { if (started) return; started = true; loadAllChapters(); };
+    const start = () => { if (started) return; started = true; currentSet = pickSet(); loadAllChapters(); };
     order.forEach((id, i) => {
       const img = stills[id].el;
       if (i === 0) { img.onload = start; img.onerror = start; }
@@ -172,11 +218,17 @@
   let target = 0, shown = 0, rafId = null, lastTick = 0, onScreen = true, scrubOn = false;
   let range = 1, headerH = 64, loadK = 0, loadStart = 0;
 
-  function measure() {
+  let measuredW = 0, measuredH = 0;
+  function measure(force) {
+    // Mobile browsers change innerHeight as the address bar slides; only a width change or a
+    // large height change (rotation, real resize) re-maps the journey, so the page never jumps.
+    if (!force && innerWidth === measuredW && Math.abs(innerHeight - measuredH) < 160) return false;
+    measuredW = innerWidth; measuredH = innerHeight;
     headerH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 64;
     const stageH = stage.offsetHeight || (innerHeight - headerH);
     range = Math.round(TOTAL * innerHeight / 100);
     journey.style.height = (range + stageH) + 'px';
+    return true;
   }
   function progress() {
     const top = journey.getBoundingClientRect().top;
@@ -373,7 +425,7 @@
     if (scrubOn) return;
     scrubOn = true;
     initHeroOnce();
-    measure();
+    measure(true);
     unpinStops();
     loadStart = performance.now();
     addEventListener('scroll', onScroll, { passive: true });
@@ -388,12 +440,21 @@
     pinToFinalStates();
   }
   function applyMode() {
-    if (MQLS.some(m => m.matches)) disableScrub(); else enableScrub();
+    const stat = wantsStatic();
+    document.documentElement.classList.toggle('static-journey', stat);
+    if (stat) disableScrub(); else enableScrub();
   }
-  const MQLS = GATES.map(q => matchMedia(q));
-  MQLS.forEach(m => m.addEventListener('change', applyMode));
+  REDUCE.addEventListener('change', applyMode);
 
-  addEventListener('resize', () => { if (scrubOn) { measure(); onScroll(true); } });
+  addEventListener('resize', () => {
+    if (!scrubOn) return;
+    switchSetIfNeeded();
+    const p = progress();                       // keep the visitor at the same point of the walk
+    if (measure(false)) {
+      scrollTo(0, journey.getBoundingClientRect().top + scrollY - headerH + p * range);
+      onScroll(true);
+    }
+  });
   new IntersectionObserver(([en]) => { onScreen = en.isIntersecting; if (onScreen) onScroll(); }).observe(journey);
 
   pinToFinalStates();

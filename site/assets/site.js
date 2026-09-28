@@ -16,6 +16,12 @@
     });
   }
 
+  // The demo banner above the header pushes the page down until it scrolls away; expose its height
+  const draft = document.querySelector('.draft');
+  const setBanner = () => document.documentElement.style.setProperty('--banner-h', (draft ? draft.offsetHeight : 0) + 'px');
+  setBanner();
+  addEventListener('resize', setBanner);
+
   // Mark the current page in the nav
   const here = location.pathname.split('/').pop() || 'index.html';
   document.querySelectorAll('.nav a').forEach(a => {
