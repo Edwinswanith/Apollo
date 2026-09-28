@@ -16,9 +16,9 @@
   //   p  = 608x1080 exact centre crop (portrait phones and tablets; matches the stills' cover crop)
   const CHAPTERS = { a: {}, b: {}, c: {}, d: {} };          // a gate to lobby, b lobby to reception, c hall to corridor, d into the room
   const SETS = {
-    hd: { suffix: '',   bytes: { a: 23679197, b: 9736807, c: 14092348, d: 7203572 } },
-    l:  { suffix: '-l', bytes: { a: 11410453, b: 4520181, c: 6864956,  d: 2765950 } },
-    p:  { suffix: '-p', bytes: { a: 7657697,  b: 3319329, c: 5280726,  d: 2608456 } }
+    hd: { suffix: '',   bytes: { a: 23679197, b: 9736807, c: 15613557, d: 7203572 } },
+    l:  { suffix: '-l', bytes: { a: 11410453, b: 4520181, c: 8093640,  d: 2765950 } },
+    p:  { suffix: '-p', bytes: { a: 7657697,  b: 3319329, c: 6137682,  d: 2608456 } }
   };
   // The portrait set is an exact 9:16 centre crop, so it only matches the stills' cover crop when
   // the stage is 9:16 or narrower (phones). Upright tablets are wider than that and get the full frame.
@@ -43,8 +43,8 @@
     { type: 'hold',  ch: 'b', v: 7.958,  still: 'reception',  len: 130, stop: 'reception' },
     { type: 'glide', from: 'reception', to: 'waiting', len: 110 },
     { type: 'hold',  still: 'waiting', len: 120, stop: 'visit' },
-    { type: 'video', ch: 'c', t0: 0, t1: 12.125, from: 'waiting',    to: 'corridor',  len: 380 },
-    { type: 'hold',  ch: 'c', v: 12.125, still: 'corridor',   len: 130, stop: 'doctors' },
+    { type: 'video', ch: 'c', t0: 0, t1: 15.708, from: 'waiting',    to: 'corridor',  len: 470 },
+    { type: 'hold',  ch: 'c', v: 15.708, still: 'corridor',   len: 130, stop: 'doctors' },
     { type: 'turn',  from: 'corridor', to: 'doorway', len: 100 },
     { type: 'video', ch: 'd', t0: 0, t1: 5.792,  from: 'doorway',   to: 'room',      len: 180 },
     { type: 'hold',  ch: 'd', v: 5.792,  still: 'room',       len: 130, stop: 'room' },
