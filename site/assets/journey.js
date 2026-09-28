@@ -11,27 +11,34 @@
     '(prefers-reduced-motion: reduce)'
   ];
 
-  const VIDEO_URL = 'assets/video/journey.mp4';
-  const VIDEO_BYTES = 22766195;
+  // The walk, as four chapter videos encoded from the full-quality masters.
+  // They load in order (a first, behind the ring); each has its own seek gate.
+  const CHAPTERS = {
+    a: { url: 'assets/video/walk-a.mp4', bytes: 23679197 },   // gate to lobby (S1 + S2)
+    b: { url: 'assets/video/walk-b.mp4', bytes: 9736807 },    // lobby to reception (S3, 4K master)
+    c: { url: 'assets/video/walk-c.mp4', bytes: 14092348 },   // waiting hall to corridor (S4 + S5)
+    d: { url: 'assets/video/walk-d.mp4', bytes: 7203572 }     // doorway into the room (S6)
+  };
+  const CH_ORDER = ['a', 'b', 'c', 'd'];
 
   // The journey, in scroll order. len is in viewport heights (a starting point).
-  // hold: camera still (v = video time, still = matching image). video: walk t0..t1.
+  // hold: camera still (ch + v = chapter video time, still = matching image). video: walk t0..t1 in chapter ch.
   // fade / glide / turn / light / match: designed code transitions between stills.
   const SEG = [
-    { type: 'hold',  v: 0,      still: 'arrival',    len: 110, stop: 'arrival', first: true },
-    { type: 'video', t0: 0,     t1: 14.458, from: 'arrival',    to: 'lobby',     len: 480 },
-    { type: 'hold',  v: 14.458, still: 'lobby',      len: 40 },
+    { type: 'hold',  ch: 'a', v: 0,      still: 'arrival',    len: 110, stop: 'arrival', first: true },
+    { type: 'video', ch: 'a', t0: 0, t1: 14.458, from: 'arrival',    to: 'lobby',     len: 480 },
+    { type: 'hold',  ch: 'a', v: 14.458, still: 'lobby',      len: 40 },
     { type: 'fade',  from: 'lobby', to: 'lobby-desk', len: 80 },
-    { type: 'hold',  still: 'lobby-desk', next: 14.5, len: 120, stop: 'lobby' },
-    { type: 'video', t0: 14.5,  t1: 22.458, from: 'lobby-desk', to: 'reception', len: 260 },
-    { type: 'hold',  v: 22.458, still: 'reception',  len: 130, stop: 'reception' },
+    { type: 'hold',  still: 'lobby-desk', len: 120, stop: 'lobby' },
+    { type: 'video', ch: 'b', t0: 0, t1: 7.958,  from: 'lobby-desk', to: 'reception', len: 260 },
+    { type: 'hold',  ch: 'b', v: 7.958,  still: 'reception',  len: 130, stop: 'reception' },
     { type: 'glide', from: 'reception', to: 'waiting', len: 110 },
-    { type: 'hold',  still: 'waiting', next: 22.5, len: 120, stop: 'visit' },
-    { type: 'video', t0: 22.5,  t1: 34.625, from: 'waiting',    to: 'corridor',  len: 380 },
-    { type: 'hold',  v: 34.625, still: 'corridor',   len: 130, stop: 'doctors' },
+    { type: 'hold',  still: 'waiting', len: 120, stop: 'visit' },
+    { type: 'video', ch: 'c', t0: 0, t1: 12.125, from: 'waiting',    to: 'corridor',  len: 380 },
+    { type: 'hold',  ch: 'c', v: 12.125, still: 'corridor',   len: 130, stop: 'doctors' },
     { type: 'turn',  from: 'corridor', to: 'doorway', len: 100 },
-    { type: 'video', t0: 34.667, t1: 40.458, from: 'doorway',   to: 'room',      len: 180 },
-    { type: 'hold',  v: 40.458, still: 'room',       len: 130, stop: 'room' },
+    { type: 'video', ch: 'd', t0: 0, t1: 5.792,  from: 'doorway',   to: 'room',      len: 180 },
+    { type: 'hold',  ch: 'd', v: 5.792,  still: 'room',       len: 130, stop: 'room' },
     { type: 'light', from: 'room', to: 'bedside', len: 120 },
     { type: 'hold',  still: 'bedside', push: true,   len: 130, stop: 'care' },
     { type: 'match', from: 'bedside', to: 'team', len: 110 },
@@ -39,6 +46,10 @@
     { type: 'fade',  from: 'team', to: 'logo-wall', bloom: true, len: 110 },
     { type: 'hold',  still: 'logo-wall',             len: 110, stop: 'book', last: true }
   ];
+  // Every non-walk segment pre-seeks the next walk under the stills, so it starts on its first frame.
+  SEG.forEach((g, n) => {
+    if (g.type !== 'video') g.upcoming = SEG.slice(n + 1).find(x => x.type === 'video') || null;
+  });
   const TOTAL = SEG.reduce((s, g) => s + g.len, 0);
   let acc = 0;
   for (const g of SEG) { g.a = acc / TOTAL; acc += g.len; g.b = acc / TOTAL; }
@@ -47,7 +58,6 @@
   const journey = document.getElementById('journey');
   if (!journey) return;
   const stage = journey.querySelector('.stage');
-  const video = document.getElementById('hero');
   const glow = stage.querySelector('.glow');
   const ringFill = stage.querySelector('.loader .fill');
   const railEl = stage.querySelector('.rail');
@@ -62,40 +72,48 @@
   const smooth = (x, e0, e1) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
   const ease = t => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-  /* ---------- video: streamed Blob, gated seeks ---------- */
-  let videoReady = false, videoFailed = false, heroInit = false;
-  let seekBusy = false, pendingTime = null;
-
-  function requestSeek(t) {
-    if (!videoReady || !video.duration) return;
-    t = clamp(t, 0, video.duration - 0.02);
-    if (Math.abs(video.currentTime - t) < 0.01 && !seekBusy) return;
-    if (seekBusy) { pendingTime = t; return; }
-    seekBusy = true;
-    video.currentTime = t;
-  }
-  video.addEventListener('seeked', () => {
-    seekBusy = false;
-    if (pendingTime !== null) { const t = pendingTime; pendingTime = null; requestSeek(t); }
-    kick();                                    // re-evaluate which layer should show
+  /* ---------- chapter videos: streamed Blobs, gated seeks ---------- */
+  let heroInit = false;
+  const media = stage.querySelector('.media');
+  const stillsBox = media.querySelector('.stills');
+  CH_ORDER.forEach(id => {
+    const c = CHAPTERS[id];
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'none'; v.tabIndex = -1;
+    v.disablePictureInPicture = true;
+    v.setAttribute('aria-hidden', 'true');
+    v.className = 'walk';
+    media.insertBefore(v, stillsBox);
+    Object.assign(c, { id, el: v, ready: false, failed: false, busy: false, pending: null, on: false });
+    v.addEventListener('seeked', () => {
+      c.busy = false;
+      if (c.pending !== null) { const t = c.pending; c.pending = null; requestSeek(id, t); }
+      kick();                                  // re-evaluate which layer should show
+    });
+    v.addEventListener('error', () => { c.busy = false; c.pending = null; });
   });
-  video.addEventListener('error', () => { seekBusy = false; pendingTime = null; });
 
-  function failVideo() {
-    videoFailed = true;
-    stage.classList.add('video-failed');
-    kick();
+  function requestSeek(id, t) {
+    const c = CHAPTERS[id];
+    if (!c.ready || !c.el.duration) return;
+    t = clamp(t, 0, c.el.duration - 0.02);
+    if (!c.busy && Math.abs(c.el.currentTime - t) < 0.01) return;
+    if (c.busy) { c.pending = t; return; }
+    c.busy = true;
+    c.el.currentTime = t;
   }
+  const anyBusy = () => CH_ORDER.some(id => CHAPTERS[id].busy);
 
-  async function loadHeroBlob() {
+  async function loadChapter(c) {
     const ctrl = new AbortController();
     let watchdog = setTimeout(() => ctrl.abort(), 20000);
-    const res = await fetch(VIDEO_URL, { priority: 'low', signal: ctrl.signal });
+    const res = await fetch(c.url, { priority: 'low', signal: ctrl.signal });
     if (!res.ok || !res.body) throw new Error('video ' + res.status);
-    const total = Number(res.headers.get('Content-Length')) || VIDEO_BYTES;
+    const total = Number(res.headers.get('Content-Length')) || c.bytes;
     const reader = res.body.getReader();
     const chunks = [];
     let got = 0, lastRing = 0;
+    const showRing = c.id === 'a';             // the ring only covers the first walk
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -105,35 +123,49 @@
       got += value.length;
       const frac = Math.min(1, got / total);
       const now = performance.now();
-      if (now - lastRing > 100 || frac === 1) {
+      if (showRing && (now - lastRing > 100 || frac === 1)) {
         lastRing = now;
         ringFill.style.setProperty('--ld', Math.round(126 * (1 - frac)));
       }
     }
     clearTimeout(watchdog);
-    ringFill.style.setProperty('--ld', 0);
-    video.src = URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' }));
-    video.load();
-    video.addEventListener('canplay', () => {
-      videoReady = true;
-      stage.classList.add('video-ready');
-      onScroll(true);
-    }, { once: true });
+    if (showRing) ringFill.style.setProperty('--ld', 0);
+    c.el.src = URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' }));
+    c.el.load();
+    await new Promise((resolve, reject) => {
+      c.el.addEventListener('canplay', resolve, { once: true });
+      c.el.addEventListener('error', reject, { once: true });
+    });
+    c.ready = true;
+    if (c.id === 'a') stage.classList.add('video-ready');
+    kick();
+  }
+
+  async function loadAllChapters() {
+    for (const id of CH_ORDER) {
+      const c = CHAPTERS[id];
+      try { await loadChapter(c); }
+      catch (_) {
+        c.failed = true;                        // this walk falls back to crossfading stills
+        if (id === 'a') stage.classList.add('video-failed');
+        kick();
+      }
+    }
   }
 
   function initHeroOnce() {
     if (heroInit) return;
     heroInit = true;
-    // Stills first (the arrival frame wins the bandwidth race), then the video.
+    // Stills first (the arrival frame wins the bandwidth race), then the walks in order.
     const order = ['arrival', 'lobby', 'lobby-desk', 'reception', 'waiting', 'corridor', 'doorway', 'room', 'bedside', 'team', 'logo-wall'];
     let started = false;
-    const startBlob = () => { if (started) return; started = true; loadHeroBlob().catch(failVideo); };
+    const start = () => { if (started) return; started = true; loadAllChapters(); };
     order.forEach((id, i) => {
       const img = stills[id].el;
-      if (i === 0) { img.onload = startBlob; img.onerror = startBlob; }
+      if (i === 0) { img.onload = start; img.onerror = start; }
       img.src = img.dataset.src;
     });
-    setTimeout(startBlob, 4000);
+    setTimeout(start, 4000);
   }
 
   /* ---------- scroll to progress ---------- */
@@ -164,7 +196,7 @@
     const k = 0.14;
     shown += (target - shown) * (1 - Math.pow(1 - k, dt / 16.667));
     if (loadK < 1) loadK = clamp((now - loadStart) / 900, 0, 1);
-    const settled = Math.abs(target - shown) < 0.00002 && loadK >= 1 && !seekBusy;
+    const settled = Math.abs(target - shown) < 0.00002 && loadK >= 1 && !anyBusy();
     if (settled) shown = target;
     render(shown);
     if (settled) { rafId = null; lastTick = 0; } else rafId = requestAnimationFrame(tick);
@@ -183,31 +215,41 @@
   let glowO = -1;
   function setGlow(o) { o = Math.round(o * 1000) / 1000; if (o !== glowO) { glow.style.opacity = o; glowO = o; } }
 
-  const videoAt = t => videoReady && Math.abs(video.currentTime - t) < 0.6;
+  const videoAt = (id, t) => CHAPTERS[id].ready && Math.abs(CHAPTERS[id].el.currentTime - t) < 0.6;
+  let activeCh;
+  function showChapter(id) {
+    if (id === activeCh) return;
+    activeCh = id;
+    CH_ORDER.forEach(k => {
+      const c = CHAPTERS[k], on = k === id;
+      if (c.on !== on) { c.on = on; c.el.classList.toggle('on', on); }
+    });
+  }
 
   function render(p) {
     const i = Math.max(0, SEG.findIndex(g => p <= g.b));
     const g = SEG[i];
     const u = clamp((p - g.a) / (g.b - g.a), 0, 1);
     const want = {};                               // still id -> [opacity, transform, origin]
+    showChapter(g.type === 'video' || g.v !== undefined ? g.ch : null);
     let glowWant = 0;
 
+    if (g.upcoming) requestSeek(g.upcoming.ch, g.upcoming.t0);   // pre-seek the next walk under the stills
     if (g.type === 'hold') {
       if (g.v !== undefined) {
-        requestSeek(g.v);
-        if (!videoAt(g.v)) want[g.still] = [1];
+        requestSeek(g.ch, g.v);
+        if (!videoAt(g.ch, g.v)) want[g.still] = [1];
       } else {
         const tf = g.push ? `scale(${(1 + 0.04 * u).toFixed(4)})` : '';
         want[g.still] = [1, tf, g.push ? '41% 40%' : ''];
-        if (g.next !== undefined) requestSeek(g.next);   // pre-seek the next walk under the still
       }
     } else if (g.type === 'video') {
       const t = g.t0 + (g.t1 - g.t0) * u;
-      requestSeek(t);
-      if (!videoReady) {                           // complete without video: crossfade the stills
+      requestSeek(g.ch, t);
+      if (!CHAPTERS[g.ch].ready) {                 // complete without video: crossfade the stills
         want[g.from] = [1];
         want[g.to] = [smooth(u, 0.35, 0.65)];
-      } else if (!videoAt(t)) {
+      } else if (!videoAt(g.ch, t)) {
         want[u < 0.5 ? g.from : g.to] = [1];       // hold a still while a far seek lands
       }
     } else if (g.type === 'fade') {

@@ -14,7 +14,8 @@ site/                 the website (this is what gets deployed)
   doctors.html, departments.html, book.html,
   locations.html, contact.html, emergency.html
   assets/
-    video/journey.mp4 the scroll video (40.5 s, 22.8 MB)
+    video/walk-a..d.mp4 the walk as four chapter videos (1920x1080, 52 MB total),
+                      encoded once from the full-quality Veo masters and loaded in order
     stills/           chapter images (transitions, phone and reduced-motion versions)
     site.css, journey.css, site.js, journey.js
 tools/
@@ -42,6 +43,6 @@ Open http://127.0.0.1:8080/. Opening index.html directly shows the still-image v
 
 ## Behaviour
 
-- Laptops and desktops: the scroll-driven walk with a streamed video and code transitions.
+- Laptops and desktops: the scroll-driven walk; chapter A streams behind a loading ring, B to D follow in the background.
 - Phones, portrait tablets and reduced motion: a static chapter version; the video is never downloaded.
-- If the video fails to load, the walk still works on still images.
+- If any chapter fails to load, that walk crossfades still images and the rest of the journey still plays.
