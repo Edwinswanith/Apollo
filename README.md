@@ -48,6 +48,7 @@ Open http://127.0.0.1:8080/. Opening index.html directly shows the still-image v
 - The animated walk runs on every device: phones, tablets, laptops and desktops.
 - Each screen shape loads the matching video set (portrait crop, 720p or 1080p); rotating mid-walk swaps sets and keeps your place.
 - Phones and upright tablets show the text in a bottom sheet and the stop rail as a progress line across the top.
-- Chapter A streams behind a loading ring; B to D follow in the background.
+- Chapters stream into memory progressively (MediaSource / ManagedMediaSource, `*.frag.mp4`, frames identical to the `.mp4` files): the walk is usable as soon as the first fragments arrive. The chapter the visitor needs downloads first; the next one starts only after it completes. Browsers without MediaSource, or where it fails, use the original whole-file `.mp4` loader automatically.
+- If the visitor scrolls past what has arrived, the walk holds the last arrived frame and catches up.
 - Visitors who turned on reduce motion or data saver get a still-photo version with the same content.
 - If any chapter fails to load, that walk crossfades still images and the rest of the journey still plays.

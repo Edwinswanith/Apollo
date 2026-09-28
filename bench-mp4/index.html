@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MP4 Startup Benchmark</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#F3EEE6;color:#1B2A2F;font:14px/1.4 system-ui,sans-serif;overflow-x:clip}
+  .bar{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px 12px;background:rgba(243,238,230,.95);border-bottom:1px solid rgba(0,0,0,.12)}
+  .bar a{padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,.2);color:inherit;text-decoration:none}
+  .bar a.on{background:#13808B;color:#fff;border-color:#13808B}
+  .run{position:relative}
+  .stage{position:sticky;top:48px;height:calc(100vh - 48px);overflow:hidden;background:#D9D2C6}
+  .stage img,.stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .stage video{opacity:0}
+  .stage video.on{opacity:1}
+  .hud{position:absolute;right:10px;bottom:10px;z-index:5;padding:8px 10px;border-radius:8px;background:rgba(27,42,47,.8);color:#fff;font:12px/1.35 ui-monospace,monospace;white-space:pre}
+  .panel{position:absolute;left:24px;top:24px;z-index:4;padding:14px 18px;border-radius:12px;background:rgba(251,248,243,.95)}
+  .panel button{margin-top:8px;padding:8px 12px;border-radius:8px;border:0;background:#13808B;color:#fff}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="run" id="run">
+  <div class="stage" id="stage">
+    <img id="poster" alt="">
+    <div class="panel">Your visit starts here.<br><button id="cta" type="button">Book an appointment</button></div>
+    <div class="hud" id="hud">…</div>
+  </div>
+</div>
+<div style="height:60vh;display:grid;place-items:center">End of benchmark</div>
+<script>
+(() => {
+  'use strict';
+  const q = new URLSearchParams(location.search);
+  const MODE = q.get('mode') || 'opt';               // cur = live site today, opt = progressive streaming
+  const ENC = q.get('enc') || '';                    // optional encode variant for chapter A in opt mode
+  const portrait = innerWidth / Math.max(1, innerHeight - 48) <= 0.5625;
+  const P = portrait ? '-p' : '';
+  const T0 = performance.now();
+  const M = window.__mb = { mode: MODE, enc: ENC || 'current', posterMs: null, uiMs: null, firstUsableMs: null, smoothMs: null, bSmoothMs: null, samples: [], seeks: 0 };
+
+  document.getElementById('bar').innerHTML = ['cur', 'opt', 'mse'].map(m => {
+    const u = new URLSearchParams(q); u.set('mode', m);
+    return `<a class="${m === MODE ? 'on' : ''}" href="?${u}">${m === 'cur' ? 'CURRENT (blob, all in order)' : m === 'opt' ? 'STREAM (range + prefetch)' : 'PROGRESSIVE MEMORY (MSE + prefetch)'}</a>`;
+  }).join('') + `<span>chapter A file: ${MODE === 'opt' && ENC ? ENC : 'current walk-a' + P}</span>`;
+
+  // The UI is usable as soon as the page script runs (buttons, scrolling)
+  document.getElementById('cta').addEventListener('click', () => { M.ctaClicks = (M.ctaClicks || 0) + 1; });
+  M.uiMs = performance.now() - T0;
+
+  const stage = document.getElementById('stage'), run = document.getElementById('run'), hud = document.getElementById('hud');
+  const poster = document.getElementById('poster');
+  poster.onload = () => { M.posterMs = performance.now() - T0; };
+  poster.fetchPriority = 'high';
+  poster.src = 'arrival' + P + '.jpg';
+
+  // Two chapters with the live site's scroll lengths (walk A 480vh, then walk B 260vh)
+  const CH = [
+    { id: 'a', url: (MODE === 'opt' && ENC ? 'v/' + ENC + '.mp4' : 'cur/walk-a' + P + '.mp4'), dur: 14.458, len: 480 },
+    { id: 'b', url: 'cur/walk-b' + P + '.mp4', dur: 7.958, len: 260 }
+  ];
+  const TOTAL = CH.reduce((s, c) => s + c.len, 0);
+  let acc = 0; CH.forEach(c => { c.a = acc / TOTAL; acc += c.len; c.b = acc / TOTAL; });
+  run.style.height = `calc(${TOTAL}vh + 100vh)`;
+
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  CH.forEach(c => {
+    const v = document.createElement('video');
+    v.muted = true; v.playsInline = true; v.preload = 'none';
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+    stage.insertBefore(v, poster.nextSibling);
+    Object.assign(c, { el: v, ready: false, busy: false, pending: null, shownT: 0, requested: false });
+    v.addEventListener('seeked', () => {
+      c.busy = false; c.shownT = v.currentTime; M.seeks++;
+      if (c.pending !== null) { const t = c.pending; c.pending = null; seek(c, t); }
+      kick();
+    });
+    v.addEventListener('error', () => { c.busy = false; c.pending = null; });
+  });
+  function seek(c, t) {
+    if (!c.ready) return;
+    t = clamp(t, 0, c.el.duration - 0.02);
+    if (!c.busy && Math.abs(c.el.currentTime - t) < 0.01) return;
+    if (c.busy) { c.pending = t; return; }
+    c.busy = true; c.el.currentTime = t;
+  }
+  function markFullyBuffered(c) {
+    const check = () => {
+      const b = c.el.buffered;
+      if (b.length && b.start(0) <= 0.05 && b.end(b.length - 1) >= c.el.duration - 0.45) {
+        if (c.id === 'a' && M.smoothMs === null) M.smoothMs = performance.now() - T0;
+        if (c.id === 'b' && M.bSmoothMs === null) M.bSmoothMs = performance.now() - T0;
+        return true;
+      }
+    };
+    if (!check()) { c.el.addEventListener('progress', check); c.el.addEventListener('canplaythrough', check); }
+  }
+
+  // ---- CURRENT: the live site's loader (whole file as a Blob, chapters strictly in order) ----
+  async function blobLoad(c) {
+    const r = await fetch(c.url, { priority: 'low' });
+    const blob = await r.blob();
+    c.el.src = URL.createObjectURL(blob); c.el.load();
+    await new Promise(res => c.el.addEventListener('canplay', res, { once: true }));
+    try { await c.el.play(); } catch (_) {} c.el.pause();
+    c.ready = true;
+    if (c.id === 'a') { M.firstUsableMs = M.smoothMs = performance.now() - T0; }
+    else M.bSmoothMs = performance.now() - T0;
+    kick();
+  }
+  // ---- OPTIMIZED: progressive streaming with HTTP range requests ----
+  async function supportsRange(url) {
+    try { const r = await fetch(url, { headers: { Range: 'bytes=0-1' } }); await r.arrayBuffer(); return r.status === 206; }
+    catch (_) { return false; }
+  }
+  async function streamLoad(c) {
+    c.requested = true;
+    c.el.preload = 'auto';
+    c.el.src = c.url; c.el.load();
+    await new Promise(res => c.el.addEventListener('loadeddata', res, { once: true }));
+    try { await c.el.play(); } catch (_) {} c.el.pause();
+    c.ready = true;
+    if (c.id === 'a') M.firstUsableMs = performance.now() - T0;
+    markFullyBuffered(c);
+    kick();
+  }
+
+  // ---- PROGRESSIVE MEMORY: fetch the fragmented file and append it to a MediaSource as it arrives ----
+  const MSE_TYPE = P ? 'video/mp4; codecs="avc1.64001f"' : 'video/mp4; codecs="avc1.640032"';
+  async function mseLoad(c) {
+    c.requested = true;
+    const ms = new MediaSource();
+    c.el.src = URL.createObjectURL(ms);
+    await new Promise(r => ms.addEventListener('sourceopen', r, { once: true }));
+    const sb = ms.addSourceBuffer(MSE_TYPE);
+    const append = buf => new Promise((res, rej) => { sb.addEventListener('updateend', res, { once: true }); sb.addEventListener('error', rej, { once: true }); sb.appendBuffer(buf); });
+    c.el.addEventListener('loadeddata', async () => {
+      try { await c.el.play(); } catch (_) {} c.el.pause();
+      c.ready = true; if (c.id === 'a') M.firstUsableMs = performance.now() - T0; kick();
+    }, { once: true });
+    const res = await fetch(c.url.replace('.mp4', '.frag.mp4'));
+    const reader = res.body.getReader();
+    let pend = [], pendBytes = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) { pend.push(value); pendBytes += value.length; }
+      // append in ~256 KB batches (fewer, larger appends)
+      if (pendBytes >= 262144 || (done && pendBytes)) {
+        const buf = new Uint8Array(pendBytes); let o = 0; for (const p of pend) { buf.set(p, o); o += p.length; }
+        pend = []; pendBytes = 0;
+        await append(buf);
+      }
+      if (done) break;
+    }
+    ms.endOfStream();
+    if (c.id === 'a') { M.smoothMs = performance.now() - T0; prefetchNext(shown); } else M.bSmoothMs = performance.now() - T0;
+    kick();
+  }
+
+  let useStream = false;
+  if (MODE === 'cur') {
+    const start = () => (async () => { for (const c of CH) await blobLoad(c); })();
+    let started = false; const go = () => { if (!started) { started = true; start(); } };
+    poster.addEventListener('load', go, { once: true }); setTimeout(go, 4000);
+  } else if (MODE === 'mse') {
+    M.mseSupported = !!(window.MediaSource && MediaSource.isTypeSupported(MSE_TYPE));
+    (M.mseSupported ? mseLoad : blobLoad)(CH[0]);
+  } else {
+    // start chapter A immediately (in parallel with the poster); B waits for proximity
+    supportsRange(CH[0].url).then(ok => { useStream = ok; M.rangeSupported = ok; ok ? streamLoad(CH[0]) : blobLoad(CH[0]); });
+  }
+  function prefetchNext(p) {
+    // start the next chapter when the visitor is 35% into the current one (or already past it)
+    if (MODE === 'cur' || CH[1].requested) return;
+    // MSE: the next chapter waits until the current one has fully arrived, unless the visitor is already
+    // in the last quarter of it; streaming keeps the simple 35% rule
+    const near = MODE === 'mse' ? (M.smoothMs !== null || p >= CH[0].a + (CH[0].b - CH[0].a) * 0.75) : p >= CH[0].a + (CH[0].b - CH[0].a) * 0.35;
+    if (near) {
+      CH[1].requested = true; M.bRequestedAt = performance.now() - T0;
+      MODE === 'mse' ? (M.mseSupported ? mseLoad(CH[1]) : blobLoad(CH[1])) : useStream ? streamLoad(CH[1]) : blobLoad(CH[1]);
+    }
+  }
+
+  // ---- scroll -> smoothed progress (identical to the live site) ----
+  let target = 0, shown = 0, raf = null, last = 0;
+  const progress = () => clamp((48 - run.getBoundingClientRect().top) / (run.offsetHeight - stage.offsetHeight), 0, 1);
+  addEventListener('scroll', () => { target = progress(); kick(); }, { passive: true });
+  function kick() { if (raf === null) raf = requestAnimationFrame(tick); }
+  function tick(now) {
+    const dt = Math.min(100, now - (last || now)); last = now;
+    shown += (target - shown) * (1 - Math.pow(1 - 0.14, dt / 16.667));
+    if (Math.abs(target - shown) < 1e-5) shown = target;
+    render(shown);
+    if (shown !== target || CH.some(c => c.busy)) raf = requestAnimationFrame(tick); else { raf = null; last = 0; }
+  }
+  let lastHud = 0;
+  function render(p) {
+    prefetchNext(p);
+    const c = p <= CH[0].b ? CH[0] : CH[1];
+    const u = clamp((p - c.a) / (c.b - c.a), 0, 1);
+    const t = u * c.dur;
+    seek(c, t);
+    CH.forEach(x => x.el.classList.toggle('on', x === c && x.ready));
+    // what the visitor actually sees, as journey progress
+    const disp = c.ready ? c.a + (c.b - c.a) * clamp(c.shownT / c.dur, 0, 1) : (c === CH[0] ? 0 : CH[0].b);
+    M.samples.push({ t: performance.now(), shown: p, disp, ready: c.ready, ch: c.id });
+    if (M.samples.length > 30000) M.samples.shift();
+    if (performance.now() - lastHud > 250) {
+      lastHud = performance.now();
+      const bf = c.el.buffered; const be = bf.length ? bf.end(bf.length - 1) : 0;
+      hud.textContent = `${MODE}  chapter ${c.id}  ${c.ready ? 'ready' : 'waiting'}\n` +
+        `poster ${fmt(M.posterMs)}  first usable ${fmt(M.firstUsableMs)}  A fully buffered ${fmt(M.smoothMs)}\n` +
+        `buffered ${be.toFixed(1)}s / ${c.el.duration ? c.el.duration.toFixed(1) : '?'}s   lag ${(Math.abs(disp - p) * 100).toFixed(2)}%`;
+    }
+  }
+  const fmt = v => v === null || v === undefined ? '…' : (v / 1000).toFixed(2) + 's';
+  kick();
+})();
+</script>
+</body>
+</html>

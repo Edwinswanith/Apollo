@@ -15,3 +15,13 @@ node_modules/
 *.zip
 .DS_Store
 Thumbs.db
+
+# S3 playback benchmark assets (local only)
+bench/frames/
+bench/tmp/
+bench/a/
+
+# MP4 delivery benchmark (local only)
+bench-mp4/cur/
+bench-mp4/v/
+bench-mp4/*.jpg

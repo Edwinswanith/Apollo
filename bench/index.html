@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S3 Playback Benchmark</title>
+<style>
+  :root{--bg:#F3EEE6;--ink:#1B2A2F;--teal:#13808B}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,sans-serif;overflow-x:clip}
+  .bar{position:fixed;top:0;left:0;right:0;z-index:10;display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 12px;background:rgba(243,238,230,.95);border-bottom:1px solid rgba(0,0,0,.12)}
+  .bar a{padding:6px 10px;border-radius:8px;border:1px solid rgba(0,0,0,.2);color:var(--ink);text-decoration:none}
+  .bar a.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .bar b{margin-left:6px}
+  .run{height:420vh;position:relative}
+  .stage{position:sticky;top:48px;height:calc(100vh - 48px);overflow:hidden;background:#D9D2C6}
+  video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .hud{position:absolute;right:10px;bottom:10px;z-index:5;padding:8px 10px;border-radius:8px;background:rgba(27,42,47,.8);color:#fff;font:12px/1.35 ui-monospace,monospace;white-space:pre}
+  .after{height:60vh;display:grid;place-items:center}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="run" id="run">
+  <div class="stage" id="stage">
+    <div class="hud" id="hud">loading…</div>
+  </div>
+</div>
+<div class="after">End of S3 benchmark</div>
+<script>
+(() => {
+  'use strict';
+  const q = new URLSearchParams(location.search);
+  const MODE = q.get('mode') || 'b';                 // a = current MP4, b = image sequence
+  const FPS = +(q.get('fps') || 12);
+  const FMT = q.get('fmt') || 'avif';
+  const BLEND = q.get('blend') !== '0';
+  const portrait = innerWidth / Math.max(1, innerHeight - 48) <= 0.5625;
+  const V = q.get('v') || (portrait ? 'p' : 'd');
+  const MOBILE = matchMedia('(pointer: coarse)').matches || innerWidth < 900;
+  const DUR = 8;                                      // S3 master length (s)
+  const N = FPS * DUR;
+
+  // ---- control bar ----
+  const link = (label, patch) => {
+    const u = new URLSearchParams(q); Object.entries(patch).forEach(([k, v]) => u.set(k, v));
+    const on = Object.entries(patch).every(([k, v]) => (q.get(k) || { mode: 'b', fps: '12', fmt: 'avif', blend: '1' }[k]) === String(v));
+    return `<a class="${on ? 'on' : ''}" href="?${u}">${label}</a>`;
+  };
+  document.getElementById('bar').innerHTML =
+    link('A: MP4 (current)', { mode: 'a' }) + link('B: frames', { mode: 'b' }) + ' <b>B:</b>' +
+    [8, 12, 15].map(f => link(f + ' fps', { mode: 'b', fps: f })).join('') +
+    link('AVIF', { mode: 'b', fmt: 'avif' }) + link('WebP', { mode: 'b', fmt: 'webp' }) +
+    link('blend on', { mode: 'b', blend: 1 }) + link('blend off', { mode: 'b', blend: 0 });
+
+  const run = document.getElementById('run'), stage = document.getElementById('stage'), hud = document.getElementById('hud');
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const T0 = performance.now();
+
+  // ---- shared metrics ----
+  const M = window.__bench = {
+    mode: MODE, fps: MODE === 'b' ? FPS : 24, fmt: MODE === 'b' ? FMT : 'mp4', blend: MODE === 'b' && BLEND, set: V,
+    firstVisualMs: null, fullyLoadedMs: null, frames: MODE === 'b' ? N : 192,
+    samples: [], longFrames: 0, ticks: 0, drawn: 0, misses: 0
+  };
+  function bytes() {
+    return performance.getEntriesByType('resource')
+      .filter(r => /\.(mp4|webp|avif)$/.test(r.name))
+      .reduce((s, r) => s + (r.encodedBodySize || r.transferSize || 0), 0);
+  }
+
+  // ---- scroll -> smoothed progress (identical to the live site: dt-normalised lerp, k = 0.14) ----
+  let target = 0, shown = 0, raf = null, last = 0;
+  const progress = () => clamp((48 - run.getBoundingClientRect().top) / (run.offsetHeight - stage.offsetHeight), 0, 1);
+  addEventListener('scroll', () => { target = progress(); if (raf === null) raf = requestAnimationFrame(tick); }, { passive: true });
+  function tick(now) {
+    const dt = Math.min(100, now - (last || now));
+    if (last && now - last > 25) M.longFrames++;
+    last = now; M.ticks++;
+    shown += (target - shown) * (1 - Math.pow(1 - 0.14, dt / 16.667));
+    if (Math.abs(target - shown) < 1e-5) shown = target;
+    paint(shown, now);
+    if (shown !== target || busy()) raf = requestAnimationFrame(tick); else { raf = null; last = 0; }
+  }
+
+  let paint, busy = () => false, displayed = () => 0;
+
+  if (MODE === 'a') {
+    // ===== A: the live site's approach (whole file as a Blob, gated seeks) =====
+    const video = document.createElement('video');
+    video.muted = true; video.playsInline = true; stage.prepend(video);
+    let seeking = false, pending = null, lastSeekedT = 0;
+    const seek = t => { if (!video.duration) return; t = clamp(t, 0, video.duration - 0.02);
+      if (seeking) { pending = t; return; } if (Math.abs(video.currentTime - t) < 0.01) return; seeking = true; video.currentTime = t; };
+    video.addEventListener('seeked', () => { seeking = false; lastSeekedT = video.currentTime; M.drawn++;
+      if (pending !== null) { const t = pending; pending = null; seek(t); } if (raf === null) raf = requestAnimationFrame(tick); });
+    busy = () => seeking;
+    M.decodedFrames = () => 1;                         // the browser keeps its own decode buffers for video
+    M.decodedMB = () => video.videoWidth * video.videoHeight * 4 / 1048576;
+    displayed = () => lastSeekedT / DUR;
+    paint = (p) => { seek(p * DUR); sample(p); };
+    fetch(`a/walk-b${V === 'p' ? '-p' : ''}.mp4`).then(r => r.blob()).then(b => {
+      M.fullyLoadedMs = performance.now() - T0;
+      video.src = URL.createObjectURL(b);
+      video.addEventListener('loadeddata', () => { M.firstVisualMs = performance.now() - T0; hudUpdate(); }, { once: true });
+    });
+  } else {
+    // ===== B: image sequence on a canvas =====
+    const canvas = document.createElement('canvas'); stage.prepend(canvas);
+    const ctx = canvas.getContext('2d', { alpha: false });
+    const dir = `frames/${V}-${FPS}-${FMT}/`;
+    const url = i => dir + String(i + 1).padStart(3, '0') + '.' + FMT;
+    const bmp = new Array(N).fill(null), state = new Array(N).fill(0);   // 0 none, 1 loading, 2 ready
+    const WINDOW = MOBILE ? 24 : N;                    // frames kept decoded around the playhead
+    let inflight = 0, loadedCount = 0, lastDraw = '';
+    M.decodedFrames = () => bmp.filter(Boolean).length;
+    M.decodedMB = () => bmp.filter(Boolean).reduce((s, b) => s + b.width * b.height * 4, 0) / 1048576;
+    const MAX_INFLIGHT = MOBILE ? 3 : 6;
+
+    function resize() {
+      const dpr = Math.min(2, devicePixelRatio || 1);
+      canvas.width = Math.round(stage.clientWidth * dpr); canvas.height = Math.round(stage.clientHeight * dpr); lastDraw = '';
+    }
+    resize(); addEventListener('resize', () => { resize(); paint(shown); });
+
+    function load(i) {
+      state[i] = 1; inflight++;
+      fetch(url(i)).then(r => r.blob()).then(b => createImageBitmap(b)).then(im => {
+        bmp[i] = im; state[i] = 2; loadedCount++;
+        if (i === 0 && M.firstVisualMs === null) M.firstVisualMs = performance.now() - T0;
+        if (loadedCount === N && M.fullyLoadedMs === null) M.fullyLoadedMs = performance.now() - T0;
+      }).catch(() => { state[i] = 0; }).finally(() => { inflight--; pump(); if (raf === null) raf = requestAnimationFrame(tick); });
+    }
+    let dirSign = 1, lastIdx = 0;
+    function pump() {
+      const c = Math.round(shown * (N - 1));
+      if (c !== lastIdx) { dirSign = c > lastIdx ? 1 : -1; lastIdx = c; }
+      // nearest first, twice as far ahead in the scroll direction as behind
+      for (let d = 0; d < N * 2 && inflight < MAX_INFLIGHT; d++) {
+        const ahead = c + dirSign * d, behind = c - dirSign * Math.floor(d / 2);
+        for (const i of d % 2 ? [ahead] : [ahead, behind]) {
+          if (i >= 0 && i < N && state[i] === 0 && Math.abs(i - c) <= WINDOW && inflight < MAX_INFLIGHT) load(i);
+        }
+      }
+      if (MOBILE) for (let i = 0; i < N; i++) if (state[i] === 2 && Math.abs(i - c) > WINDOW + 8) { bmp[i].close(); bmp[i] = null; state[i] = 0; loadedCount--; }
+    }
+    function cover(im, alpha) {
+      const cw = canvas.width, ch = canvas.height, s = Math.max(cw / im.width, ch / im.height);
+      const w = im.width * s, h = im.height * s;
+      ctx.globalAlpha = alpha; ctx.drawImage(im, (cw - w) / 2, (ch - h) / 2, w, h);
+    }
+    let shownPos = 0;
+    displayed = () => shownPos;
+    busy = () => inflight > 0;
+    paint = (p) => {
+      pump();
+      const f = p * (N - 1), i = Math.floor(f), frac = f - i;
+      let a = i, b = Math.min(N - 1, i + 1);
+      // fall back to the nearest decoded frame if the exact one is not ready yet
+      if (state[a] !== 2) {
+        M.misses++;
+        let k = -1; for (let d = 1; d < N; d++) { if (state[a - d] === 2) { k = a - d; break; } if (state[a + d] === 2) { k = a + d; break; } }
+        if (k < 0) { sample(p); return; } a = b = k;
+      }
+      const useBlend = BLEND && b !== a && state[b] === 2;
+      const key = useBlend ? a + ':' + Math.round(frac * 32) : String(a);
+      if (key !== lastDraw) {
+        cover(bmp[a], 1);
+        if (useBlend) cover(bmp[b], frac);
+        ctx.globalAlpha = 1; lastDraw = key; M.drawn++;
+      }
+      shownPos = (useBlend ? a + frac : a) / (N - 1);
+      sample(p);
+    };
+    pump();
+    raf = requestAnimationFrame(tick);
+  }
+
+  // ---- per-tick sample: how far the picture is from where the scroll says it should be ----
+  let lastHud = 0;
+  function sample(p) {
+    M.samples.push({ t: performance.now(), target, shown: p, disp: displayed() });
+    if (M.samples.length > 20000) M.samples.shift();
+    if (performance.now() - lastHud > 250) hudUpdate();
+  }
+  function hudUpdate() {
+    lastHud = performance.now();
+    const mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + ' MB heap' : 'n/a';
+    hud.textContent = `${MODE === 'a' ? 'A  MP4 (current)' : `B  frames ${FPS} fps ${FMT}${BLEND ? ' +blend' : ''}`}  set=${V}\n` +
+      `first visual ${M.firstVisualMs === null ? '…' : M.firstVisualMs.toFixed(0) + ' ms'}   downloaded ${(bytes() / 1048576).toFixed(2)} MB\n` +
+      `progress ${(shown * 100).toFixed(1)}%   lag ${(Math.abs(displayed() - shown) * 100).toFixed(2)}%   ${mem}`;
+  }
+  window.__benchBytes = bytes;
+})();
+</script>
+</body>
+</html>

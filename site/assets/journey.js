@@ -16,9 +16,9 @@
   //   p  = 608x1080 exact centre crop (portrait phones and tablets; matches the stills' cover crop)
   const CHAPTERS = { a: {}, b: {}, c: {}, d: {} };          // a gate to lobby, b lobby to reception, c hall to corridor, d into the room
   const SETS = {
-    hd: { suffix: '',   bytes: { a: 23679197, b: 9736807, c: 15613557, d: 7203572 } },
-    l:  { suffix: '-l', bytes: { a: 11410453, b: 4520181, c: 8093640,  d: 2765950 } },
-    p:  { suffix: '-p', bytes: { a: 7657697,  b: 3319329, c: 6137682,  d: 2608456 } }
+    hd: { suffix: '',   codec: 'avc1.640032', bytes: { a: 23683389, b: 9739131, c: 15618285, d: 7205342 } },
+    l:  { suffix: '-l', codec: 'avc1.64001f', bytes: { a: 11414813, b: 4522577, c: 8098484,  d: 2767764 } },
+    p:  { suffix: '-p', codec: 'avc1.64001f', bytes: { a: 7662109,  b: 3321729, c: 6142546,  d: 2610270 } }
   };
   // The portrait set is an exact 9:16 centre crop, so it only matches the stills' cover crop when
   // the stage is 9:16 or narrower (phones). Upright tablets are wider than that and get the full frame.
@@ -105,10 +105,12 @@
     v.muted = true; v.playsInline = true; v.preload = 'none'; v.tabIndex = -1;
     v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
     v.disablePictureInPicture = true;
+    v.disableRemotePlayback = true;
     v.setAttribute('aria-hidden', 'true');
     v.className = 'walk';
     media.insertBefore(v, stillsBox);
-    Object.assign(c, { id, el: v, ready: false, failed: false, busy: false, pending: null, on: false });
+    Object.assign(c, { id, el: v, ready: false, failed: false, busy: false, pending: null, on: false,
+      complete: false, active: false, mode: null, ms: null, sb: null, offset: 0, ctrl: null, paused: false });
     v.addEventListener('seeked', () => {
       c.busy = false;
       if (c.pending !== null) { const t = c.pending; c.pending = null; requestSeek(id, t); }
@@ -117,10 +119,26 @@
     v.addEventListener('error', () => { c.busy = false; c.pending = null; });
   });
 
+  // The latest time this chapter can show right now. While a chapter is still streaming in, a seek
+  // past the arrived data would stall on a frame that does not exist yet, so the walk holds the last
+  // decodable frame and catches up as data arrives.
+  function playableT(c, t) {
+    if (!isFinite(c.el.duration)) return t;
+    t = clamp(t, 0, c.el.duration - 0.02);
+    if (c.complete || c.mode !== 'mse') return t;
+    const b = c.el.buffered;
+    let best = 0;
+    for (let i = 0; i < b.length; i++) {
+      if (t >= b.start(i) && t <= b.end(i) - 0.05) return t;
+      if (b.end(i) - 0.05 <= t) best = Math.max(best, b.end(i) - 0.05);
+    }
+    return Math.max(0, best);
+  }
+
   function requestSeek(id, t) {
     const c = CHAPTERS[id];
     if (!c.ready || !c.el.duration) return;
-    t = clamp(t, 0, c.el.duration - 0.02);
+    t = playableT(c, t);
     if (!c.busy && Math.abs(c.el.currentTime - t) < 0.01) return;
     if (c.busy) { c.pending = t; return; }
     c.busy = true;
@@ -128,11 +146,111 @@
   }
   const anyBusy = () => CH_ORDER.some(id => CHAPTERS[id].busy);
 
-  let loadGen = 0, currentSet = null, activeCtrl = null;
+  let loadGen = 0, currentSet = null;
 
-  async function loadChapter(c, gen) {
+  // Progressive memory: MediaSource (or Apple's ManagedMediaSource on iPhone/iPad 17.1+), detected by
+  // capability, never by user agent. Without it, chapters use the original whole-file loader below.
+  const MSClass = window.ManagedMediaSource || window.MediaSource || null;
+  const mseType = () => 'video/mp4; codecs="' + SETS[currentSet].codec + '"';
+  let mseBroken = false;
+  const mseSupported = () => { if (mseBroken) return false; try { return !!(MSClass && MSClass.isTypeSupported(mseType())); } catch (_) { return false; } };
+
+  // Measured download speed (bytes per second) across all chapter transfers.
+  const net = { bytes: 0, ms: 0 };
+  const throughput = () => (net.ms > 400 ? net.bytes * 1000 / net.ms : null);
+
+  // The small corner ring shows progress of the chapter the visitor is waiting for, until it can play.
+  function ringProgress(c, frac) {
+    if (c.ready || c.id !== (need() || 'a')) return;
+    ringFill.style.setProperty('--ld', Math.round(126 * (1 - Math.min(1, frac))));
+  }
+  function markReady(c) {
+    if (c.ready) return;
+    c.ready = true;
+    if (c.id === (need() || 'a') || !stage.classList.contains('video-ready')) {
+      ringFill.style.setProperty('--ld', 0); stage.classList.add('video-ready'); loadRemainingStills();
+    }
+    kick();
+  }
+  async function wakeForIOS(c) {
+    // iPhones and iPads only paint seeked frames of a muted inline video after it has played once.
+    try { await c.el.play(); } catch (_) {}
+    c.el.pause();
+  }
+
+  // ---- progressive path: fetch the fragmented file and append it to a MediaSource as it arrives ----
+  async function streamChapter(c, gen) {
+    if (!c.ms) {
+      c.mode = 'mse';
+      const ms = new MSClass();
+      c.ms = ms;
+      c.objectUrl = URL.createObjectURL(ms);
+      c.el.src = c.objectUrl;
+      await new Promise((res, rej) => {
+        ms.addEventListener('sourceopen', res, { once: true });
+        setTimeout(() => rej(new Error('sourceopen timeout')), 8000);
+      });
+      if (gen !== loadGen) return;
+      try { c.sb = ms.addSourceBuffer(mseType()); }
+      catch (e) { mseBroken = true; throw e; }
+      c.el.addEventListener('loadeddata', async () => {
+        await wakeForIOS(c);
+        if (gen === loadGen) markReady(c);
+      }, { once: true });
+    }
     const ctrl = new AbortController();
-    activeCtrl = ctrl;
+    c.ctrl = ctrl;
+    const sb = c.sb;
+    const headers = c.offset > 0 ? { Range: 'bytes=' + c.offset + '-' } : {};
+    let watchdog = setTimeout(() => ctrl.abort(), 20000);
+    const res = await fetch(c.fragUrl, { signal: ctrl.signal, headers, priority: c.id === need() ? 'high' : 'low' });
+    if (!(res.ok || res.status === 206) || !res.body) throw new Error('video ' + res.status);
+    let skip = c.offset > 0 && res.status !== 206 ? c.offset : 0;   // server ignored the range: skip what we have
+    const reader = res.body.getReader();
+    let pend = [], pendBytes = 0, t0 = performance.now();
+    const append = buf => new Promise((resolve, reject) => {
+      const done = () => { sb.removeEventListener('error', fail); resolve(); };
+      const fail = () => { sb.removeEventListener('updateend', done); reject(new Error('append failed')); };
+      sb.addEventListener('updateend', done, { once: true });
+      sb.addEventListener('error', fail, { once: true });
+      sb.appendBuffer(buf);
+    });
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) {
+        clearTimeout(watchdog);
+        watchdog = setTimeout(() => ctrl.abort(), 20000);
+        const now = performance.now();
+        net.bytes += value.length; net.ms += now - t0; t0 = now;
+        let chunk = value;
+        if (skip) { const k = Math.min(skip, chunk.length); chunk = chunk.subarray(k); skip -= k; }
+        if (chunk.length) { pend.push(chunk); pendBytes += chunk.length; }
+      }
+      // append in ~256 KB batches: the first batch already holds the first frames of the walk
+      if (pendBytes >= 262144 || (done && pendBytes)) {
+        const buf = new Uint8Array(pendBytes); let o = 0;
+        for (const x of pend) { buf.set(x, o); o += x.length; }
+        pend = []; pendBytes = 0;
+        if (gen !== loadGen || c.sb !== sb) return;
+        await append(buf);
+        c.offset += buf.length;
+        ringProgress(c, c.offset / c.bytes);
+        kick();
+      }
+      if (done) break;
+    }
+    clearTimeout(watchdog);
+    if (gen !== loadGen) return;
+    if (c.ms && c.ms.readyState === 'open') c.ms.endOfStream();
+    c.complete = true;
+    markReady(c);
+  }
+
+  // ---- fallback path: the original whole-file loader (unchanged behaviour) ----
+  async function loadChapterBlob(c, gen) {
+    c.mode = 'blob';
+    const ctrl = new AbortController();
+    c.ctrl = ctrl;
     let watchdog = setTimeout(() => ctrl.abort(), 20000);
     const res = await fetch(c.url, { priority: 'low', signal: ctrl.signal });
     if (!res.ok || !res.body) throw new Error('video ' + res.status);
@@ -140,7 +258,6 @@
     const reader = res.body.getReader();
     const chunks = [];
     let got = 0, lastRing = 0;
-    const showRing = c.id === 'a';             // the ring only covers the first walk
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -148,16 +265,11 @@
       watchdog = setTimeout(() => ctrl.abort(), 20000);
       chunks.push(value);
       got += value.length;
-      const frac = Math.min(1, got / total);
       const now = performance.now();
-      if (showRing && (now - lastRing > 100 || frac === 1)) {
-        lastRing = now;
-        ringFill.style.setProperty('--ld', Math.round(126 * (1 - frac)));
-      }
+      if (now - lastRing > 100) { lastRing = now; ringProgress(c, got / total); }
     }
     clearTimeout(watchdog);
-    if (gen !== loadGen) return;                // the screen changed shape mid-load; a newer set is loading
-    if (showRing) ringFill.style.setProperty('--ld', 0);
+    if (gen !== loadGen) return;
     c.objectUrl = URL.createObjectURL(new Blob(chunks, { type: 'video/mp4' }));
     c.el.src = c.objectUrl;
     c.el.load();
@@ -165,16 +277,15 @@
       c.el.addEventListener('canplay', resolve, { once: true });
       c.el.addEventListener('error', reject, { once: true });
     });
-    // iPhones and iPads only paint seeked frames of a muted inline video after it has played once.
-    try { await c.el.play(); } catch (_) {}
-    c.el.pause();
+    await wakeForIOS(c);
     if (gen !== loadGen) return;
-    c.ready = true;
-    if (c.id === 'a') stage.classList.add('video-ready');
-    kick();
+    c.complete = true;
+    markReady(c);
   }
 
   async function loadChapterDirect(c, gen) {
+    // fetch is blocked when the page is opened straight from disk (file://) or by some previews
+    c.mode = 'direct';
     c.el.preload = 'auto';
     c.el.src = c.url;
     c.el.load();
@@ -183,38 +294,118 @@
       c.el.addEventListener('canplaythrough', () => { clearTimeout(t); resolve(); }, { once: true });
       c.el.addEventListener('error', () => { clearTimeout(t); reject(new Error('error')); }, { once: true });
     });
-    try { await c.el.play(); } catch (_) {}
-    c.el.pause();
+    await wakeForIOS(c);
     if (gen !== loadGen) return;
-    if (c.id === 'a') ringFill.style.setProperty('--ld', 0);
-    c.ready = true;
-    if (c.id === 'a') stage.classList.add('video-ready');
-    kick();
+    c.complete = true;
+    markReady(c);
   }
 
-  async function loadAllChapters() {
+  function pauseDownload(c) {
+    if (c.ctrl) { c.ctrl.paused = true; try { c.ctrl.abort(); } catch (_) {} }
+  }
+  function resetChapterMedia(c) {
+    pauseDownload(c);
+    c.ctrl = null; c.ms = null; c.sb = null; c.offset = 0;
+    c.el.removeAttribute('src'); c.el.load();
+    if (c.objectUrl) { URL.revokeObjectURL(c.objectUrl); c.objectUrl = null; }
+  }
+
+  // Runs one chapter download; on any failure of the progressive path, falls back to the whole file.
+  // The chapter stays 'active' until this run has fully exited, so a resume can never overlap it.
+  async function runChapter(c, gen) {
+    c.active = true;
+    let ctrlAtStart = null;
+    try {
+      if (c.mode === 'blob' || !mseSupported()) await loadChapterBlob(c, gen);
+      else await streamChapter(c, gen);
+    } catch (e) {
+      ctrlAtStart = c.ctrl;
+      if (gen !== loadGen) return;
+      if (ctrlAtStart && ctrlAtStart.paused) return;          // paused on purpose: resumes later from c.offset
+      if (c.mode === 'mse' && !c.ready) {
+        // the progressive path failed before anything played: start over with the original loader
+        resetChapterMedia(c); c.mode = 'blob';
+        try { await loadChapterBlob(c, gen); return; } catch (_) {}
+      } else if (c.mode === 'mse') {
+        // already playing: keep what arrived and continue from where it stopped (a few tries)
+        c.mseErrors = (c.mseErrors || 0) + 1;
+        if (c.mseErrors < 3) return;
+      }
+      if (gen !== loadGen) return;
+      try { resetChapterMedia(c); await loadChapterDirect(c, gen); return; } catch (_) {}
+      if (gen !== loadGen) return;
+      c.failed = true;
+      if (c.id === 'a') stage.classList.add('video-failed');
+      kick();
+    } finally {
+      c.active = false;
+      if (gen === loadGen) setTimeout(schedule, 0);
+    }
+  }
+
+  // ---- scheduling: the chapter the visitor needs always has priority ----
+  let segIndex = 0;
+  function need() {
+    const g = SEG[segIndex] || SEG[0];
+    if (g.type === 'video' || g.v !== undefined) return g.ch;
+    return g.upcoming ? g.upcoming.ch : null;
+  }
+  const bitrate = c => c.bytes / Math.max(1, c.el.duration || 8);   // bytes per second of walk
+  let started = false;
+  function schedule() {
+    if (!started) return;
+    const gen = loadGen;
+    const nid = need() || CH_ORDER[CH_ORDER.length - 1];
+    const cur = CHAPTERS[nid];
+    // 1. the needed chapter: make sure it is downloading, and pause speculative downloads competing with it
+    if (!cur.complete && !cur.failed) {
+      CH_ORDER.forEach(id => {
+        const o = CHAPTERS[id];
+        if (id !== nid && o.active && o.mode === 'mse' && !o.complete && o.ctrl && !o.ctrl.paused) pauseDownload(o);
+      });
+      if (!cur.active) runChapter(cur, gen);
+      return;                                                    // the next chapter waits until this one is done
+
+    }
+    // 2. the next chapter, only when it cannot slow the current one
+    const nx = CHAPTERS[CH_ORDER[CH_ORDER.indexOf(nid) + 1]];
+    if (!nx || nx.complete || nx.failed || nx.active) return;
+    if (CH_ORDER.some(id => CHAPTERS[id].active)) return;         // one download at a time
+    const g = SEG[segIndex];
+    const u = g && g.type === 'video' && g.ch === nid ? clamp((shown - g.a) / (g.b - g.a), 0, 1) : 0;
+    const speed = throughput();
+    const roomy = speed !== null && speed > 2 * bitrate(cur);
+    if (cur.complete || (u >= 0.75 && roomy)) runChapter(nx, gen);
+  }
+  let lastSchedule = 0;
+  function maybeSchedule(i) {
+    const now = performance.now();
+    if (i !== segIndex || now - lastSchedule > 300) { segIndex = i; lastSchedule = now; schedule(); }
+  }
+
+  // The poster (arrival still) goes first; the transition stills follow once chapter A can walk.
+  let stillsQueued = false;
+  function loadRemainingStills() {
+    if (stillsQueued) return;
+    stillsQueued = true;
+    Object.keys(stills).forEach(id => {
+      const img = stills[id].el;
+      if (!img.getAttribute('src')) { img.fetchPriority = 'low'; img.src = img.dataset.src; }
+    });
+  }
+
+  function beginLoading() {
     const gen = ++loadGen;
     const set = SETS[currentSet];
     CH_ORDER.forEach(id => {
       const c = CHAPTERS[id];
       c.url = 'assets/video/walk-' + id + set.suffix + '.mp4';
+      c.fragUrl = 'assets/video/walk-' + id + set.suffix + '.frag.mp4';
       c.bytes = set.bytes[id];
+      Object.assign(c, { ready: false, failed: false, busy: false, pending: null, complete: false, active: false, mode: null, offset: 0, mseErrors: 0 });
     });
-    for (const id of CH_ORDER) {
-      if (gen !== loadGen) return;
-      const c = CHAPTERS[id];
-      try { await loadChapter(c, gen); }
-      catch (_) {
-        if (gen !== loadGen) return;
-        // fetch is blocked when the page is opened straight from disk (file://) or by some
-        // previews and proxies; the video element can still load the file directly.
-        try { await loadChapterDirect(c, gen); continue; } catch (_) {}
-        if (gen !== loadGen) return;
-        c.failed = true;                        // this walk falls back to crossfading stills
-        if (id === 'a') stage.classList.add('video-failed');
-        kick();
-      }
-    }
+    started = true;
+    if (gen === loadGen) schedule();
   }
 
   // Rotating a phone or resizing a window across a set boundary swaps to the matching set.
@@ -222,32 +413,25 @@
     const want = pickSet();
     if (!heroInit || want === currentSet) return;
     currentSet = want;
-    if (activeCtrl) activeCtrl.abort();
-    CH_ORDER.forEach(id => {
-      const c = CHAPTERS[id];
-      c.ready = false; c.failed = false; c.busy = false; c.pending = null;
-      c.el.removeAttribute('src'); c.el.load();
-      if (c.objectUrl) { URL.revokeObjectURL(c.objectUrl); c.objectUrl = null; }
-    });
+    CH_ORDER.forEach(id => resetChapterMedia(CHAPTERS[id]));
     stage.classList.remove('video-ready', 'video-failed');
     ringFill.style.setProperty('--ld', 126);
-    loadAllChapters();
+    beginLoading();
     kick();
   }
 
   function initHeroOnce() {
     if (heroInit) return;
     heroInit = true;
-    // Stills first (the arrival frame wins the bandwidth race), then the walks in order.
-    const order = ['arrival', 'lobby', 'lobby-desk', 'reception', 'waiting', 'corridor', 'doorway', 'room', 'bedside', 'team', 'logo-wall'];
-    let started = false;
-    const start = () => { if (started) return; started = true; currentSet = pickSet(); loadAllChapters(); };
-    order.forEach((id, i) => {
-      const img = stills[id].el;
-      if (i === 0) { img.onload = start; img.onerror = start; }
-      img.src = img.dataset.src;
-    });
-    setTimeout(start, 4000);
+    // The arrival still is the poster: it loads first and alone, then the walk starts streaming.
+    const poster = stills.arrival.el;
+    poster.fetchPriority = 'high';
+    let go = false;
+    const start = () => { if (go) return; go = true; currentSet = pickSet(); beginLoading(); };
+    poster.onload = start; poster.onerror = start;
+    poster.src = poster.dataset.src;
+    setTimeout(start, 2500);
+    setTimeout(loadRemainingStills, 8000);     // safety: transition stills arrive even if chapter A cannot
   }
 
   /* ---------- scroll to progress ---------- */
@@ -303,7 +487,7 @@
   let glowO = -1;
   function setGlow(o) { o = Math.round(o * 1000) / 1000; if (o !== glowO) { glow.style.opacity = o; glowO = o; } }
 
-  const videoAt = (id, t) => CHAPTERS[id].ready && Math.abs(CHAPTERS[id].el.currentTime - t) < 0.6;
+  const videoAt = (id, t) => { const c = CHAPTERS[id]; return c.ready && Math.abs(c.el.currentTime - playableT(c, t)) < 0.6; };
   let activeCh;
   function showChapter(id) {
     if (id === activeCh) return;
@@ -318,6 +502,7 @@
     const i = Math.max(0, SEG.findIndex(g => p <= g.b));
     const g = SEG[i];
     const u = clamp((p - g.a) / (g.b - g.a), 0, 1);
+    maybeSchedule(i);
     const want = {};                               // still id -> [opacity, transform, origin]
     showChapter(g.type === 'video' || g.v !== undefined ? g.ch : null);
     let glowWant = 0;
