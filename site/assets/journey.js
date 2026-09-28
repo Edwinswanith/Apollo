@@ -160,6 +160,24 @@
     kick();
   }
 
+  async function loadChapterDirect(c, gen) {
+    c.el.preload = 'auto';
+    c.el.src = c.url;
+    c.el.load();
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('timeout')), 30000);
+      c.el.addEventListener('canplaythrough', () => { clearTimeout(t); resolve(); }, { once: true });
+      c.el.addEventListener('error', () => { clearTimeout(t); reject(new Error('error')); }, { once: true });
+    });
+    try { await c.el.play(); } catch (_) {}
+    c.el.pause();
+    if (gen !== loadGen) return;
+    if (c.id === 'a') ringFill.style.setProperty('--ld', 0);
+    c.ready = true;
+    if (c.id === 'a') stage.classList.add('video-ready');
+    kick();
+  }
+
   async function loadAllChapters() {
     const gen = ++loadGen;
     const set = SETS[currentSet];
@@ -173,6 +191,10 @@
       const c = CHAPTERS[id];
       try { await loadChapter(c, gen); }
       catch (_) {
+        if (gen !== loadGen) return;
+        // fetch is blocked when the page is opened straight from disk (file://) or by some
+        // previews and proxies; the video element can still load the file directly.
+        try { await loadChapterDirect(c, gen); continue; } catch (_) {}
         if (gen !== loadGen) return;
         c.failed = true;                        // this walk falls back to crossfading stills
         if (id === 'a') stage.classList.add('video-failed');
