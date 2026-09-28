@@ -23,7 +23,7 @@ HEAD = """<!doctype html>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
-<div class="draft" role="note">Demo site. Names, phone numbers and addresses are sample content, not real hospital information.</div>
+<div class="draft" role="note">Demo site. Apollo-wide facts and helplines are from public Apollo Hospitals sources. Doctors, branch address and hours are samples.</div>
 <header class="site-header">
   <a class="brand" href="index.html" aria-label="Apollo Hospitals home">
     <img src="assets/img/mark.png" alt="" width="36" height="36">
@@ -59,11 +59,11 @@ FOOT = """
         <a href="index.html">Walk through the hospital</a><a href="doctors.html">Find a doctor</a><a href="departments.html">Departments</a><a href="book.html">Book appointment</a><a href="locations.html">Locations</a><a href="contact.html">Contact</a><a href="emergency.html">Emergency</a>
       </nav>
     </div>
-    <p class="fine">Some images on this site are AI-assisted visualisations based on photographs of the hospital. Demo content: all names, phone numbers and addresses on this site are samples.</p>
+    <p class="fine">Some images on this site are AI-assisted visualisations based on photographs of the hospital. Apollo Hospitals was founded in 1983 in Chennai by Dr. Prathap C. Reddy. Doctor profiles, the branch address and visiting hours on this site are sample content.</p>
   </div>
 </footer>
 <div class="action-bar" aria-label="Quick actions">
-  <a class="btn btn-ghost" href="contact.html">Call</a>
+  <a class="btn btn-ghost" href="tel:18605001066">Call</a>
   <a class="btn btn-primary" href="book.html">Book</a>
   <a class="btn btn-ghost" href="locations.html">Directions</a>
 </div>
@@ -73,8 +73,8 @@ FOOT = """
 </html>
 """
 
-PHONE_APPT = '<a href="tel:+910000000001">+91 00000 00001</a>'
-PHONE_GEN = '<a href="tel:+910000000002">+91 00000 00002</a>'
+PHONE_APPT = '<a href="tel:18605001066">1860-500-1066</a> (Apollo Lifeline, 24/7)'
+EMERGENCY = '<a href="tel:1066">1066</a>'
 ADDRESS = "12 Demo Road, Sample Nagar, Your City 500000"
 
 def rows(pairs):
@@ -82,31 +82,31 @@ def rows(pairs):
     return f'<dl class="row-list rv">{items}</dl>'
 
 DOCTORS = [
-    ("Dr. Ananya Rao", "Cardiology", "MBBS, MD, DM (Cardiology)", "Mon, Wed, Fri"),
+    ("Dr. Ananya Rao", "Cardiac Sciences", "MBBS, MD, DM (Cardiology)", "Mon, Wed, Fri"),
     ("Dr. Vikram Menon", "Orthopaedics", "MBBS, MS (Orthopaedics)", "Tue, Thu, Sat"),
-    ("Dr. Priya Sharma", "Neurology", "MBBS, MD, DM (Neurology)", "Mon to Fri"),
-    ("Dr. Arjun Iyer", "Paediatrics", "MBBS, MD (Paediatrics)", "Mon to Sat"),
-    ("Dr. Meera Nair", "Women's Health", "MBBS, MS (Obstetrics and Gynaecology)", "Tue to Sat"),
-    ("Dr. Rahul Verma", "General Medicine", "MBBS, MD (General Medicine)", "Mon to Sat"),
+    ("Dr. Priya Sharma", "Neurosciences", "MBBS, MD, DM (Neurology)", "Mon to Fri"),
+    ("Dr. Arjun Iyer", "Oncology", "MBBS, MD, DM (Medical Oncology)", "Mon to Sat"),
+    ("Dr. Meera Nair", "Gastroenterology", "MBBS, MD, DM (Gastroenterology)", "Tue to Sat"),
+    ("Dr. Rahul Verma", "Transplants", "MBBS, MS, MCh (Surgical Gastroenterology)", "Mon, Wed, Fri"),
 ]
 
 def doctor_items():
     return "".join(
-        f'<li class="card"><h3>{n}</h3><p>{sp}</p><p>{q} · {d}</p>'
+        f'<li class="card"><h3>{n}</h3><p>{sp} · sample profile</p><p>{q} · {d}</p>'
         '<p style="margin-top:12px"><a href="book.html">Book with this doctor</a></p></li>'
         for n, sp, q, d in DOCTORS
     )
 
 DEPARTMENTS = [
-    ("Cardiology", "Heart checks, heart rhythm care and heart surgery."),
-    ("Orthopaedics", "Bones, joints, sports injuries and joint replacement."),
-    ("Neurology", "Headaches, stroke, epilepsy and nerve conditions."),
+    ("Cardiac Sciences", "Heart checks, heart rhythm care, interventions and heart surgery."),
+    ("Oncology", "Cancer diagnosis, treatment and follow-up care in one place."),
+    ("Neurosciences", "Brain, spine and nerve care: stroke, headaches, seizures and movement disorders."),
+    ("Orthopaedics", "Bones and joints: fractures, sports injuries and joint replacement."),
+    ("Gastroenterology", "Stomach, liver and digestive care."),
+    ("Transplants", "Liver, kidney, heart and paediatric transplant programmes."),
+    ("Emergency and Critical Care", "Emergency care day and night. Call 1066."),
     ("Paediatrics", "Care for babies, children and teenagers."),
     ("Women's Health", "Pregnancy, childbirth and gynaecology."),
-    ("General Medicine", "Everyday illness, fevers and long-term conditions."),
-    ("Oncology", "Cancer diagnosis, treatment and follow-up care."),
-    ("Gastroenterology", "Stomach, liver and digestive care."),
-    ("ENT", "Ear, nose and throat care."),
 ]
 
 PAGES = {
@@ -136,9 +136,9 @@ PAGES = {
         lede="Use the hospital's booking system online, or call and we will help you choose a time.",
         body=(
             '<div class="rv" style="display:flex;flex-wrap:wrap;gap:12px">'
-            '<a class="btn btn-primary" href="#" aria-describedby="booking-note">Book online</a>'
-            '<a class="btn btn-ghost" href="tel:+910000000001">Call +91 00000 00001</a></div>'
-            '<p id="booking-note" class="rv" style="margin-top:14px;color:var(--ink-2)">Demo: the Book online button will link to the hospital&#39;s existing booking system.</p>'
+            '<a class="btn btn-primary" href="https://www.apollohospitals.com/book-doctor-appointment" rel="noopener" aria-describedby="booking-note">Book online</a>'
+            '<a class="btn btn-ghost" href="tel:18605001066">Call 1860-500-1066</a></div>'
+            '<p id="booking-note" class="rv" style="margin-top:14px;color:var(--ink-2)">Book online opens Apollo Hospitals&#39; own appointment page, where you can pick a doctor, a day and a time.</p>'
             + rows([("Appointments", PHONE_APPT), ("Outpatient hours", "Monday to Saturday, 8 am to 8 pm"), ("What to bring", "A photo ID, any earlier reports and a list of your medicines")])
         ),
     ),
@@ -153,17 +153,17 @@ PAGES = {
         title="Contact", desc="Phone numbers and email for Apollo Hospitals.",
         kicker="Contact", h1="Talk to us.",
         lede="Phone numbers and email for appointments and general questions.",
-        body=rows([("Appointments", PHONE_APPT), ("General enquiries", PHONE_GEN), ("Email", '<a href="mailto:hello@example.com">hello@example.com</a>'), ("Emergency", '<a href="emergency.html">112 or 108</a>')]),
+        body=rows([("Appointments", PHONE_APPT), ("Emergency", EMERGENCY + " (Apollo emergency, 24/7)"), ("Write to us", '<a href="https://www.apollohospitals.com/contact-us/post-a-query" rel="noopener">Post a query on apollohospitals.com</a>'), ("Branch address", ADDRESS + " (sample)")]),
     ),
     "emergency.html": dict(
-        title="Emergency", desc="What to do in a medical emergency.",
-        kicker="Emergency", h1="In an emergency, call now.",
-        lede="If someone's life may be in danger, call for help straight away.",
+        title="Emergency", desc="What to do in a medical emergency: call Apollo 1066.",
+        kicker="Emergency", h1="In an emergency, call 1066.",
+        lede="Apollo's emergency line answers day and night. If someone's life may be in danger, call straight away.",
         body=(
-            '<div class="card urgent rv" style="max-width:640px"><h3>Call 112</h3>'
-            '<p style="font-size:28px;color:var(--ink);margin-top:6px"><a href="tel:112">112</a> · <a href="tel:108">108</a></p>'
-            '<p style="margin-top:10px">112 is India&#39;s national emergency number. 108 is the national ambulance line.</p></div>'
-            + rows([("Ambulance", '<a href="tel:108">108</a>'), ("On arrival", "Sample: follow the signs to the emergency entrance.")])
+            '<div class="card urgent rv" style="max-width:640px"><h3>Apollo emergency</h3>'
+            '<p style="font-size:40px;font-family:var(--display);color:var(--ink);margin-top:6px"><a href="tel:1066">1066</a></p>'
+            '<p style="margin-top:10px">Apollo&#39;s 24/7 emergency and ambulance line. You can also call 112, India&#39;s national emergency number, or 108 for a government ambulance.</p></div>'
+            + rows([("National emergency", '<a href="tel:112">112</a>'), ("Ambulance", '<a href="tel:108">108</a>'), ("On arrival", "Sample: follow the signs to the emergency entrance.")])
         ),
     ),
 }
