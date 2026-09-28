@@ -35,22 +35,22 @@
   // fade / glide / turn / light / match: designed code transitions between stills.
   const SEG = [
     { type: 'hold',  ch: 'a', v: 0,      still: 'arrival',    len: 110, stop: 'arrival', first: true },
-    { type: 'video', ch: 'a', t0: 0, t1: 14.458, from: 'arrival',    to: 'lobby',     len: 480 },
+    { type: 'video', id: 'walkA', ch: 'a', t0: 0, t1: 14.458, from: 'arrival',    to: 'lobby',     len: 480 },
     { type: 'hold',  ch: 'a', v: 14.458, still: 'lobby',      len: 40 },
     { type: 'fade',  from: 'lobby', to: 'lobby-desk', len: 80 },
     { type: 'hold',  still: 'lobby-desk', len: 120, stop: 'lobby' },
-    { type: 'video', ch: 'b', t0: 0, t1: 7.958,  from: 'lobby-desk', to: 'reception', len: 260 },
+    { type: 'video', id: 'walkB', ch: 'b', t0: 0, t1: 7.958,  from: 'lobby-desk', to: 'reception', len: 260 },
     { type: 'hold',  ch: 'b', v: 7.958,  still: 'reception',  len: 130, stop: 'reception' },
     { type: 'glide', from: 'reception', to: 'waiting', len: 110 },
     { type: 'hold',  still: 'waiting', len: 120, stop: 'visit' },
-    { type: 'video', ch: 'c', t0: 0, t1: 15.708, from: 'waiting',    to: 'corridor',  len: 470 },
+    { type: 'video', id: 'walkC', ch: 'c', t0: 0, t1: 15.708, from: 'waiting',    to: 'corridor',  len: 470 },
     { type: 'hold',  ch: 'c', v: 15.708, still: 'corridor',   len: 130, stop: 'doctors' },
     { type: 'turn',  from: 'corridor', to: 'doorway', len: 100 },
-    { type: 'video', ch: 'd', t0: 0, t1: 5.792,  from: 'doorway',   to: 'room',      len: 180 },
+    { type: 'video', id: 'walkD', ch: 'd', t0: 0, t1: 5.792,  from: 'doorway',   to: 'room',      len: 180 },
     { type: 'hold',  ch: 'd', v: 5.792,  still: 'room',       len: 130, stop: 'room' },
     { type: 'light', from: 'room', to: 'bedside', len: 120 },
     { type: 'hold',  still: 'bedside', push: true,   len: 130, stop: 'care' },
-    { type: 'match', from: 'bedside', to: 'team', len: 110 },
+    { type: 'match', id: 'match', from: 'bedside', to: 'team', len: 110 },
     { type: 'hold',  still: 'team',                  len: 130, stop: 'visit-us' },
     { type: 'fade',  from: 'team', to: 'logo-wall', bloom: true, len: 110 },
     { type: 'hold',  still: 'logo-wall',             len: 110, stop: 'book', last: true }
@@ -76,6 +76,20 @@
   const stops = {};
   stage.querySelectorAll('.stop').forEach(el => { stops[el.dataset.stop] = { el, o: -1, k: -1, on: null }; });
   const stopOrder = SEG.filter(g => g.stop);
+
+  // Where the visitor is, per segment (the live "you are in" label).
+  const AREAS = ['Main gate', 'Entrance', 'Lobby', 'Lobby', 'Lobby', 'Lobby', 'Reception', 'Reception',
+    'Waiting hall', 'Corridor', 'Corridor', 'Corridor', 'Patient room', 'Patient room', 'Patient room',
+    'Bedside', 'Front desk', 'Front desk', 'Front desk', 'Reception'];
+  const areaName = stage.querySelector('.area-name');
+  let lastArea = '';
+
+  // Walk captions: each lives inside one segment between data-in and data-out (0..1 of that segment).
+  const segById = {};
+  SEG.forEach(g => { if (g.id) segById[g.id] = g; });
+  const beats = [...stage.querySelectorAll('.beat')].map(el => ({
+    el, seg: segById[el.dataset.seg], a: +el.dataset.in, b: +el.dataset.out, o: -1, k: -1, u: -1
+  }));
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   const smooth = (x, e0, e1) => { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); };
@@ -356,6 +370,11 @@
     setGlow(glowWant);
     renderStops(p);
     renderRail(p);
+    renderBeats(p);
+    let area = AREAS[i] || '';
+    if (g.id === 'walkA') area = u < 0.55 ? 'Main gate' : 'Entrance';        // S1 ends at the doors
+    if (g.id === 'walkC') area = u < 0.5 ? 'Waiting hall' : 'Corridor';     // S4 ends at the corridor mouth
+    if (area !== lastArea) { lastArea = area; areaName.textContent = area; }
   }
 
   function renderStops(p) {
@@ -428,7 +447,26 @@
   try { const saved = sessionStorage.getItem('apollo-choice'); if (saved) applyChoice(saved); } catch (_) {}
 
   /* ---------- live gates: scrub on / off ---------- */
+  function renderBeats(p) {
+    for (const bt of beats) {
+      const g = bt.seg;
+      const u = clamp((p - g.a) / (g.b - g.a), 0, 1);
+      const r = Math.min(0.04, (bt.b - bt.a) / 3);
+      let o = smooth(u, bt.a, bt.a + r) * (1 - smooth(u, bt.b - r, bt.b));
+      let k = clamp((u - bt.a) / (r * 2.2), 0, 1);
+      let w = clamp((u - bt.a) / (bt.b - bt.a), 0, 1);
+      o = Math.round(o * 1000) / 1000;
+      k = Math.round(k * 125) / 125;
+      w = Math.round(w * 500) / 500;
+      if (bt.o !== o) { bt.el.style.opacity = o; bt.o = o; }
+      if (bt.k !== k) { bt.el.style.setProperty('--k', k); bt.k = k; }
+      if (bt.u !== w) { bt.el.style.setProperty('--u', w); bt.u = w; }
+    }
+  }
+
   function unpinStops() {
+    beats.forEach(bt => { bt.o = -1; bt.k = -1; bt.u = -1; });
+    lastArea = '';
     for (const id in stops) { const s = stops[id]; s.o = -1; s.k = -1; s.on = null; }
     for (const id in stills) { const s = stills[id]; s.o = -1; s.tf = null; s.origin = null; }
     glowO = -1; railFill = -1; railHere = -2;
